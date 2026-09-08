@@ -2648,137 +2648,150 @@ class NPC {
     this.shirtMat = M(cfg.boss ? 0x262b3d : (cfg.shirt || 0x4f8fd9));
     this.pantsMat = M(cfg.pants || 0x2c2c34);
     const g = this.group;
-    // legs with hip pivots (waddle + walk swing)
-    this.legL = new THREE.Group(); this.legL.position.set(-0.12, 0.5, 0); g.add(this.legL);
-    this.legR = new THREE.Group(); this.legR.position.set(0.12, 0.5, 0); g.add(this.legR);
-    for (const leg of [this.legL, this.legR]) {
-      bx(leg, 0.17, 0.42, 0.21, 0, 0, -0.21, 0).material = this.pantsMat;
-      bx(leg, 0.19, 0.1, 0.3, cfg.shoe || 0x23252e, 0, -0.44, 0.05);       // rounded toy shoe
+    // ---- Overcooked chibi build: big head, plump egg body, stubby limbs ----
+    const legL = new THREE.Group(); legL.position.set(-0.13, 0.42, 0); g.add(legL);
+    const legR = new THREE.Group(); legR.position.set(0.13, 0.42, 0); g.add(legR);
+    this.legL = legL; this.legR = legR;
+    for (const leg of [legL, legR]) {
+      const lm = new THREE.Mesh(GB(0.18, 0.34, 0.2), this.pantsMat);
+      lm.position.y = -0.15; lm.castShadow = SHADOWS;
+      leg.add(lm);
+      const shoe = new THREE.Mesh(GB(0.2, 0.12, 0.34), M(cfg.shoe || 0x23252e));
+      shoe.position.set(0, -0.36, 0.05); shoe.castShadow = SHADOWS;
+      leg.add(shoe);
     }
-    // torso
+    // plump egg body (waist pivot for hit-recoil lean)
     this.torso = new THREE.Group();
-    this.torso.position.y = 0.5;
+    this.torso.position.y = 0.75;
     g.add(this.torso);
-    const body = new THREE.Mesh(GCap(0.24, 0.42), this.shirtMat);
-    body.position.y = 0.4; body.castShadow = SHADOWS;
+    const body = new THREE.Mesh(GS(0.36, 14), this.shirtMat);
+    body.scale.set(1, 1.08, 0.8); body.position.y = 0.03; body.castShadow = SHADOWS;
     this.torso.add(body);
-    tor(this.torso, 0.14, 0.035, cfg.collar || 0xf7f7f2, 0, 0.62, 0, { rx: Math.PI / 2 }); // collar
+    tor(this.torso, 0.16, 0.05, cfg.collar || 0xf7f7f2, 0, 0.39, 0, { rx: Math.PI / 2 }); // collar
     if (cfg.boss) {
       // dark suit, white shirt front and the LOOOONG red tie
-      bx(this.torso, 0.2, 0.36, 0.08, 0xffffff, 0, 0.4, 0.18);
-      bx(this.torso, 0.1, 0.08, 0.04, 0xd63c2e, 0, 0.56, 0.21);
-      bx(this.torso, 0.11, 0.62, 0.035, 0xd63c2e, 0, 0.22, 0.21);
+      bx(this.torso, 0.18, 0.32, 0.1, 0xffffff, 0, 0.12, 0.24, { rx: -0.08 });
+      bx(this.torso, 0.09, 0.08, 0.05, 0xd63c2e, 0, 0.3, 0.28);
+      bx(this.torso, 0.1, 0.5, 0.05, 0xd63c2e, 0, -0.05, 0.29);
     } else {
-      bx(this.torso, 0.34, 0.1, 0.24, cfg.tie || 0xd63c2e, 0, 0.55, 0).material = M(cfg.tie || 0xd63c2e);
+      bx(this.torso, 0.16, 0.1, 0.18, cfg.tie || 0xd63c2e, 0, 0.26, 0.18).material = M(cfg.tie || 0xd63c2e); // v-neck
     }
-    if (cfg.apron) {                                                        // apron + straps
-      bx(this.torso, 0.32, 0.36, 0.05, cfg.apron, 0, 0.3, 0.2);
-      bx(this.torso, 0.05, 0.16, 0.03, cfg.apron, -0.09, 0.6, 0.12, { rz: 0.18 });
-      bx(this.torso, 0.05, 0.16, 0.03, cfg.apron, 0.09, 0.6, 0.12, { rz: -0.18 });
+    if (cfg.apron) {
+      bx(this.torso, 0.42, 0.46, 0.12, cfg.apron, 0, -0.02, 0.24);
+      bx(this.torso, 0.06, 0.24, 0.04, cfg.apron, -0.11, 0.36, 0.2, { rz: 0.2 });
+      bx(this.torso, 0.06, 0.24, 0.04, cfg.apron, 0.11, 0.36, 0.2, { rz: -0.2 });
     }
-    if (cfg.lanyard) {                                                      // office lanyard + badge
-      bx(this.torso, 0.035, 0.26, 0.025, 0x44586f, 0, 0.48, 0.215, { rz: 0.25 });
-      bx(this.torso, 0.035, 0.26, 0.025, 0x44586f, 0, 0.48, 0.215, { rz: -0.25 });
-      bx(this.torso, 0.1, 0.13, 0.03, 0xf7f7f2, 0, 0.28, 0.235);
-      bx(this.torso, 0.06, 0.02, 0.032, 0xff3b30, 0, 0.3, 0.24);
+    if (cfg.lanyard) {
+      bx(this.torso, 0.05, 0.3, 0.03, 0x44586f, -0.07, 0.18, 0.28, { rz: 0.25 });
+      bx(this.torso, 0.05, 0.3, 0.03, 0x44586f, 0.07, 0.18, 0.28, { rz: -0.25 });
+      bx(this.torso, 0.11, 0.14, 0.035, 0xf7f7f2, 0, 0.02, 0.32);
+      bx(this.torso, 0.06, 0.024, 0.037, 0xff3b30, 0, 0.05, 0.325);
     }
-    // arms
-    this.armL = new THREE.Group(); this.armL.position.set(-0.3, 0.62, 0); this.torso.add(this.armL);
-    this.armR = new THREE.Group(); this.armR.position.set(0.3, 0.62, 0); this.torso.add(this.armR);
-    const armGeoL = new THREE.Mesh(GCap(0.07, 0.34), this.shirtMat);
-    armGeoL.position.y = -0.2; armGeoL.castShadow = SHADOWS; this.armL.add(armGeoL);
-    const armGeoR = new THREE.Mesh(GCap(0.07, 0.34), this.shirtMat);
-    armGeoR.position.y = -0.2; armGeoR.castShadow = SHADOWS; this.armR.add(armGeoR);
-    const handL = new THREE.Mesh(GS(0.075, 8), this.skinMat); handL.position.y = -0.42; this.armL.add(handL);
-    const handR = new THREE.Mesh(GS(0.075, 8), this.skinMat); handR.position.y = -0.42; this.armR.add(handR);
-    this.armL.rotation.z = 0.18; this.armR.rotation.z = -0.18;
+    // stubby arms with mitten hands
+    this.armL = new THREE.Group(); this.armL.position.set(-0.37, 1.0, 0); this.armL.rotation.z = 0.5; g.add(this.armL);
+    this.armR = new THREE.Group(); this.armR.position.set(0.37, 1.0, 0); this.armR.rotation.z = -0.5; g.add(this.armR);
+    for (const arm of [this.armL, this.armR]) {
+      const am = new THREE.Mesh(GCap(0.085, 0.16), this.shirtMat);
+      am.position.y = -0.13; am.castShadow = SHADOWS;
+      arm.add(am);
+      const hand = new THREE.Mesh(GS(0.1, 10), this.skinMat);
+      hand.position.y = -0.28; hand.castShadow = SHADOWS;
+      arm.add(hand);
+    }
     if (cfg.briefcase) {                                                    // client's briefcase in hand
-      bx(this.armR, 0.24, 0.3, 0.08, 0x5c4a33, 0.02, -0.55, 0.02);
-      bx(this.armR, 0.06, 0.03, 0.06, PAL.gold, 0, -0.42, 0.04);
+      bx(this.armR, 0.24, 0.3, 0.08, 0x5c4a33, 0.05, -0.5, 0.02);
+      bx(this.armR, 0.06, 0.03, 0.06, PAL.gold, 0, -0.36, 0.04);
     }
-    // head
+    // big head (the chibi deal)
     this.head = new THREE.Group();
-    this.head.position.y = 1.06;
+    this.head.position.y = 0.77;
     this.torso.add(this.head);
-    const skull = new THREE.Mesh(GS(0.28, 14), this.skinMat);
-    skull.position.y = 0.2; skull.castShadow = SHADOWS;
+    const skull = new THREE.Mesh(GS(0.4, 16), this.skinMat);
+    skull.castShadow = SHADOWS;
     this.head.add(skull);
     if (cfg.boss) {
-      // the legendary golden swoop
+      // the legendary golden swoop — sculpted from overlapping volumes
       this.bossHairMat = M(0xf3cf6b);
-      const cap = new THREE.Mesh(GS(0.29, 12), this.bossHairMat);
-      cap.scale.set(1.08, 0.74, 1.08); cap.position.y = 0.33;
-      this.head.add(cap);
-      const swoop = new THREE.Mesh(GS(0.2, 10), this.bossHairMat);
-      swoop.scale.set(1.55, 0.5, 0.92); swoop.position.set(0.02, 0.43, 0.13);
-      swoop.rotation.x = -0.4;
+      const dome = new THREE.Mesh(GS(0.41, 14), this.bossHairMat);
+      dome.scale.set(1.07, 0.8, 1.07); dome.position.set(0, 0.14, -0.03);
+      this.head.add(dome);
+      const swoop = new THREE.Mesh(GS(0.26, 12), this.bossHairMat);
+      swoop.scale.set(1.7, 0.55, 1.0); swoop.position.set(0, 0.27, 0.18);
+      swoop.rotation.x = -0.35;
       this.head.add(swoop);
       for (const sx of [-1, 1]) {
-        const side = new THREE.Mesh(GS(0.13, 8), this.bossHairMat);
-        side.scale.set(0.5, 0.72, 1.12); side.position.set(0.24 * sx, 0.27, 0.02);
+        const side = new THREE.Mesh(GS(0.21, 10), this.bossHairMat);
+        side.scale.set(0.55, 0.95, 1.15); side.position.set(0.37 * sx, 0.05, 0);
         this.head.add(side);
       }
+      const back = new THREE.Mesh(GS(0.3, 10), this.bossHairMat);
+      back.scale.set(1.25, 0.85, 0.95); back.position.set(0, 0.06, -0.2);
+      this.head.add(back);
     } else {
-      const hair = new THREE.Mesh(GS(0.285, 12), M(cfg.hair || 0x2c2018));
-      hair.scale.set(1.02, 0.72, 1.02); hair.position.y = 0.32;
+      const hair = new THREE.Mesh(GS(0.41, 12), M(cfg.hair || 0x2c2018));
+      hair.scale.set(1.05, 0.68, 1.0); hair.position.set(0, 0.17, -0.05);
       this.head.add(hair);
     }
-    // face — big readable Overcooked features
+    // face — big readable Overcooked features (head-center local)
     this.eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.pupilMat = new THREE.MeshBasicMaterial({ color: 0x14141c });
-    this.eyes = [];
+    this.eyes = []; this.pupils = [];
     for (const sx of [-1, 1]) {
-      const white = new THREE.Mesh(GS(0.075, 10), this.eyeMat);
-      white.position.set(0.105 * sx, 0.22, 0.215);
-      white.scale.set(1, 1.12, 0.55);
+      const white = new THREE.Mesh(GS(0.105, 10), this.eyeMat);
+      white.position.set(0.16 * sx, 0.06, 0.3);
+      white.scale.set(1, 1.25, 0.55);
+      white.userData.bsY = 1.25;
       this.head.add(white);
-      const pupil = new THREE.Mesh(GS(0.036, 8), this.pupilMat);
-      pupil.position.set(0.105 * sx, 0.215, 0.272);
-      this.head.add(pupil);
-      const glint = new THREE.Mesh(GS(0.013, 6), this.eyeMat);
-      glint.position.set(0.105 * sx + 0.015, 0.248, 0.292);
-      this.head.add(glint);
-      this.eyes.push(white, pupil, glint);
-      const brow = new THREE.Mesh(GB(cfg.boss ? 0.13 : 0.11, 0.03, 0.025), M(cfg.boss ? 0xd9b45c : 0x1a120c));
-      brow.position.set(0.105 * sx, 0.318, 0.245);
-      brow.rotation.z = 0.12 * sx;
+      const pupil = new THREE.Mesh(GS(0.05, 8), this.pupilMat);
+      pupil.position.set(0.16 * sx, 0.05, 0.375);
+      pupil.userData.bsY = 1;
+      this.pupils.push(pupil);
+      this.eyes.push(white, pupil);
+      const glint = new THREE.Mesh(GS(0.018, 6), this.eyeMat);
+      glint.position.set(0.16 * sx + 0.025, 0.1, 0.395);
+      glint.userData.bsY = 1;
+      this.eyes.push(glint);
+      const brow = new THREE.Mesh(GB(cfg.boss ? 0.15 : 0.13, 0.035, 0.03), M(cfg.boss ? 0xd9b45c : 0x1a120c));
+      brow.position.set(0.16 * sx, 0.245, 0.34);
+      brow.rotation.z = -0.1 * sx;
       this.head.add(brow);
       if (sx < 0) this.browL = brow; else this.browR = brow;
     }
-    const nose = new THREE.Mesh(GS(cfg.boss ? 0.05 : 0.037, 8), this.skinMat);
-    nose.position.set(0, 0.12, 0.262);
+    const nose = new THREE.Mesh(GS(cfg.boss ? 0.065 : 0.05, 8), this.skinMat);
+    nose.position.set(0, -0.04, 0.375);
     this.head.add(nose);
     for (const sx of [-1, 1]) {
-      const ear = new THREE.Mesh(GS(0.05, 8), this.skinMat);
-      ear.scale.set(0.55, 1, 1); ear.position.set(0.27 * sx, 0.2, 0);
+      const ear = new THREE.Mesh(GS(0.075, 8), this.skinMat);
+      ear.scale.set(0.5, 1, 1); ear.position.set(0.39 * sx, 0, 0);
       this.head.add(ear);
       if (cfg.blush) {
-        const cheek = new THREE.Mesh(GS(0.035, 8), MB(0xff9a8a));
-        cheek.scale.set(1, 0.55, 0.4); cheek.position.set(0.17 * sx, 0.09, 0.222);
+        const cheek = new THREE.Mesh(GS(0.05, 8), MB(0xff9a8a));
+        cheek.scale.set(1, 0.55, 0.4); cheek.position.set(0.25 * sx, -0.12, 0.28);
         this.head.add(cheek);
       }
     }
-    this.mouth = new THREE.Mesh(GB(0.13, 0.03, 0.02), MB(0x5c1e14));
-    this.mouth.position.set(0, 0.045, 0.258);
+    this.mouth = new THREE.Mesh(GB(0.17, 0.035, 0.02), MB(0x5c1e14));
+    this.mouth.position.set(0, -0.18, 0.33);
+    this.mouthBaseX = 1; this.mouthBaseY = 1;
     if (cfg.boss) {
-      this.mouth.scale.set(0.7, 0.7, 1); // the pursed look
-      const jowl = new THREE.Mesh(GS(0.09, 10), this.skinMat);               // chin jowl
-      jowl.scale.set(1.6, 0.62, 0.85); jowl.position.set(0, -0.012, 0.185);
+      this.mouthBaseX = 0.72; this.mouthBaseY = 0.7;                         // the pursed look
+      const jowl = new THREE.Mesh(GS(0.18, 10), this.skinMat);               // chin jowl
+      jowl.scale.set(1.5, 0.6, 0.8); jowl.position.set(0, -0.3, 0.22);
       this.head.add(jowl);
     }
     this.head.add(this.mouth);
     if (cfg.glasses) {
       for (const sx of [-1, 1]) {
-        tor(this.head, 0.062, 0.012, 0x2e4057, 0.105 * sx, 0.225, 0.235);
-        bx(this.head, 0.16, 0.012, 0.012, 0x2e4057, 0.2 * sx, 0.232, 0.17);  // temples
+        tor(this.head, 0.085, 0.014, 0x2e4057, 0.16 * sx, 0.05, 0.36);
+        bx(this.head, 0.22, 0.012, 0.012, 0x2e4057, 0.3 * sx, 0.05, 0.18);   // temples
       }
-      bx(this.head, 0.05, 0.012, 0.012, 0x2e4057, 0, 0.238, 0.248);          // bridge
+      bx(this.head, 0.07, 0.014, 0.014, 0x2e4057, 0, 0.05, 0.375);           // bridge
     }
     if (cfg.cap) {
-      const dome = new THREE.Mesh(GS(0.29, 12), M(cfg.cap));
-      dome.scale.set(1.05, 0.62, 1.05); dome.position.y = 0.365;
+      const dome = new THREE.Mesh(GS(0.415, 12), M(cfg.cap));
+      dome.scale.set(1.06, 0.68, 1.06); dome.position.y = 0.17;
       this.head.add(dome);
-      bx(this.head, 0.32, 0.035, 0.2, cfg.cap, 0, 0.325, 0.25);              // brim
+      bx(this.head, 0.36, 0.05, 0.24, cfg.cap, 0, 0.13, 0.4);                // brim
     }
     // lasers (climax)
     this.lasers = new THREE.Group();
@@ -2886,20 +2899,19 @@ class NPC {
     return true;
   }
   headWorldPos() {
-    _v2.set(0, 1.95 * this.baseScale, 0);
+    _v2.set(0, 2.0 * this.baseScale, 0);
     this.group.localToWorld(_v2);
     return _v2;
   }
   setMood(rage) {
     const t = U.clamp(rage / 100, 0, 1);
     this.skinMat.color.copy(this.skinBase).lerp(this.skinRage, t * 0.85);
-    this.browL.rotation.z = U.lerp(0.08, -0.55, t);
-    this.browR.rotation.z = U.lerp(-0.08, 0.55, t);
-    const by = U.lerp(0.31, 0.27, t);
+    this.browL.rotation.z = U.lerp(0.1, -0.55, t);
+    this.browR.rotation.z = U.lerp(-0.1, 0.55, t);
+    const by = U.lerp(0.245, 0.2, t);
     this.browL.position.y = by; this.browR.position.y = by;
-    const es = U.lerp(1, 1.4, t);
-    this.eyes.forEach(e => e.scale.setScalar(es));
-    this.mouth.scale.set(1 + t * 0.7, 1 + t * 1.8, 1);
+    this.pupilScale = 1 + t * 0.5;
+    this.mouth.scale.x = this.mouthBaseX * (1 + t * 0.6);
     if (this.glbTintMats) {
       const rageC = new THREE.Color(0xff2a2a);
       this.glbTintMats.forEach(({ m, base }) => m.color.copy(base).lerp(rageC, t * 0.55));
@@ -2980,7 +2992,7 @@ class NPC {
       this.armR.rotation.x = U.lerp(this.armR.rotation.x, -1.55, dt * 9);
       this.armR.rotation.z = U.lerp(this.armR.rotation.z, -0.15, dt * 9);
     }
-    this.torso.position.y = 0.5 + Math.sin(this.t * 2.1) * 0.015;
+    this.torso.position.y = 0.75 + Math.sin(this.t * 2.1) * 0.015;
     const sq = 1 - k * 0.14;
     this.group.scale.set(this.baseScale * (2 - sq), this.baseScale * sq, this.baseScale * (2 - sq));
     if (!walking && this.pointT > 0) {
@@ -3009,12 +3021,17 @@ class NPC {
     if (this.blinkT <= 0) { this.blink = 0.13; this.blinkT = U.rand(2.2, 5.4); }
     this.blink = Math.max(0, this.blink - dt);
     if (this.talkT > 0) this.talkT = Math.max(0, this.talkT - dt);
-    const lid = this.blink > 0 ? 0.1 : 1;
-    const es = 1 + this.moodT * 0.4;
-    for (const e of this.eyes) e.scale.y = Math.max(0.04, e.scale.x * es * lid);
-    if (this.talkT > 0 && this.mouth) {
-      const base = 1 + this.moodT * 1.8;
-      this.mouth.scale.y = base * (0.55 + Math.abs(Math.sin(this.t * 19)) * 0.85);
+    const lid = this.blink > 0 ? 0.06 : 1;
+    const es = this.pupilScale || 1;
+    for (const e of this.eyes) {
+      const bsY = e.userData.bsY || 1;
+      const grow = this.pupils.includes(e) ? es : 1;
+      e.scale.y = Math.max(0.03, bsY * grow * lid);
+      if (this.pupils.includes(e)) e.scale.x = e.scale.z = grow;
+    }
+    if (this.mouth) {
+      const base = this.mouthBaseY * (1 + this.moodT * 1.8);
+      this.mouth.scale.y = this.talkT > 0 ? base * (0.55 + Math.abs(Math.sin(this.t * 19)) * 0.85) : base;
     }
     if (game.ringing && this.cfg.ringWatch) this.head.rotation.z = shake * 2;
   }
