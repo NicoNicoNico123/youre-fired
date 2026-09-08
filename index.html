@@ -2864,7 +2864,7 @@ class NPC {
         o.castShadow = SHADOWS; o.receiveShadow = SHADOWS;
         if (o.material) {
           o.material = o.material.clone();
-          o.material.roughness = 0.42; o.material.metalness = 0.05;
+          // Preserve the authored vinyl, cloth, hair and eye finishes.
           o.material.color.multiply(tint);
           o.material.needsUpdate = true;
           this.glbTintMats.push({ m: o.material, base: o.material.color.clone() });
