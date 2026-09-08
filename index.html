@@ -395,6 +395,8 @@
 ============================================================================ */
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm';
 
 const $ = s => document.querySelector(s);
@@ -735,7 +737,7 @@ function initThree() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.12;
+  renderer.toneMappingExposure = 1.25;
   SHADOWS = !U.isMobile;
   if (SHADOWS) {
     renderer.shadowMap.enabled = true;
@@ -819,7 +821,7 @@ function initSceneContents() {
   scene.add(camera);
   // Overcooked studio lighting: warm key + soft shadows, candy-hemisphere bounce,
   // cool rim from the upper rear to pop props off the background
-  const key = new THREE.DirectionalLight(0xfff5e6, 1.8);
+  const key = new THREE.DirectionalLight(0xfff0d4, 2.0);
   key.position.set(6, 12, 7);
   if (SHADOWS) {
     key.castShadow = true;
@@ -831,7 +833,7 @@ function initSceneContents() {
     key.shadow.radius = 4;
   }
   scene.add(key);
-  scene.add(new THREE.HemisphereLight(0xe0f7fa, 0xffe0b2, 0.8));
+  scene.add(new THREE.HemisphereLight(0xd0e8ff, 0xffe8d0, 0.85));
   const rim = new THREE.DirectionalLight(0x80d8ff, 0.6);
   rim.position.set(-5, 9, -9);
   scene.add(rim);
@@ -1372,6 +1374,89 @@ function updatePropShadows() {
   }
 }
 
+/* -------------------------------------------- GLB asset pipeline (CC0) ---- */
+// Local assets/*.glb take priority (vendor Kenney/Quaternius packs here), then the
+// pinned CDN fallback, then the procedural builder. Nothing blocks gameplay on failure.
+const ASSET_MANIFEST = {
+  // NOTE: skinned-character entries are disabled while the SkeletonUtils.clone path
+  // flattens this model's bone hierarchy (bones collapse to a point — debugged via
+  // YF.npcGlbDebug / YF.glbRenderInfo). Flip enabled:true once a suitable chibi GLB
+  // clones cleanly; NPC.attachGlbCharacter + playClip are already wired.
+  npcCustomer: {
+    enabled: false,
+    url: 'assets/npc_customer.glb',
+    cdn: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+    glbHeight: 1.9,
+    clips: { idle: /^(idle|standing)$/i, angry: /punch/i, talk: /^(yes|no|wave)\b/i },
+  },
+  npcBoss: { enabled: false, url: 'assets/npc_boss.glb', glbHeight: 2.05 },   // optional chibi boss skin
+  pipelineTest: { url: 'assets/cube.glb' },   // proves the loader path end-to-end at boot
+  mug: { url: 'assets/mug.glb' },
+  laptop: { url: 'assets/laptop.glb' },
+  monitor: { url: 'assets/monitor.glb' },
+  keyboard: { url: 'assets/keyboard.glb' },
+  phoneBase: { url: 'assets/phone.glb' },
+  extinguisher: { url: 'assets/extinguisher.glb' },
+  posMachine: { url: 'assets/pos_machine.glb' },
+  trophy: { url: 'assets/trophy.glb' },
+  giftBasket: { url: 'assets/gift_basket.glb' },
+  boot: { url: 'assets/boot.glb' },
+  champagne: { url: 'assets/champagne.glb' },
+};
+const gltfLoader = new GLTFLoader();
+const gltfCache = new Map();
+function loadGlbEntry(entry) {
+  return new Promise(resolve => {
+    const attempt = (url, next) => {
+      if (!url) return next();
+      gltfLoader.load(url, g => resolve(g), undefined, () => next());
+    };
+    attempt(entry.url, () => attempt(entry.cdn, () => resolve(null)));
+  });
+}
+async function loadAssets(onProgress) {
+  const entries = Object.entries(ASSET_MANIFEST).filter(([, e]) => e.enabled !== false);
+  let done = 0;
+  const results = await Promise.all(entries.map(async ([key, entry]) => {
+    const gltf = await loadGlbEntry(entry);
+    done++;
+    if (onProgress) onProgress(done, entries.length, key);
+    return [key, gltf];
+  }));
+  for (const [key, gltf] of results) if (gltf) gltfCache.set(key, gltf);
+  return gltfCache.size;
+}
+// Fit a loaded GLB into a prop's physics envelope (def.size) and swap it in
+// for the procedural visuals. Collider, pivot and traits stay untouched.
+function applyGlbVisual(e) {
+  const cached = gltfCache.get(e.type);
+  const def = PROP_DEFS[e.type];
+  if (!cached || !def) return false;
+  const model = cached.scene.clone(true);
+  const target = new THREE.Vector3(def.size[0], def.size[1], def.size[2]);
+  const bbox = new THREE.Box3().setFromObject(model);
+  const size = bbox.getSize(new THREE.Vector3());
+  const s = Math.min(target.x / size.x, target.y / size.y, target.z / size.z) * (ASSET_MANIFEST[e.type].scale || 1);
+  model.scale.setScalar(s);
+  const b2 = new THREE.Box3().setFromObject(model);
+  const ctr = b2.getCenter(new THREE.Vector3());
+  model.position.set(-ctr.x, -b2.min.y, -ctr.z);
+  model.traverse(o => {
+    if (o.isMesh) {
+      o.castShadow = SHADOWS; o.receiveShadow = SHADOWS;
+      if (o.material) { o.material.roughness = 0.42; o.material.metalness = 0.05; o.material.needsUpdate = true; }
+    }
+    o.userData.eid = e.id;
+  });
+  e.mesh.children.forEach(c => { c.visible = false; });
+  e.mesh.add(model);
+  return true;
+}
+// Named pipeline wrappers (documentation-grade aliases over the live systems)
+function createProp(type, x, y, z, opts) { return spawnProp(type, x, y, z, opts); }
+function createNPC(cfg) { return new NPC(cfg); }
+function createDeskEnvironment(pal, opts) { return buildRoom(pal, opts); }
+
 /* --------------------------------------------------------- prop catalogue */
 // Overcooked-style candy palette: high-saturation accents, warm pastel surfaces
 const PALETTE = {
@@ -1864,6 +1949,7 @@ function spawnProp(type, x, y, z, opts = {}) {
   e.collider = world.createCollider(cd, e.body);
   g.userData.eid = addEntity(e).id;
   if (e.traits.has('grabbable')) addPropShadow(e);
+  applyGlbVisual(e);
   if (opts.onDesk) e.meta.onDesk = true;
   return e;
 }
@@ -2659,6 +2745,7 @@ class NPC {
     this.zoneHead = mkZone('head', 1.76, RAPIER.ColliderDesc.ball(0.34 * zs).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
     this.zoneTorso = mkZone('torso', 1.15, RAPIER.ColliderDesc.cuboid(0.34 * zs, 0.32 * zs, 0.26 * zs).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
     this.zoneBody = mkZone('body', 0.45, RAPIER.ColliderDesc.cuboid(0.3 * zs, 0.32 * zs, 0.26 * zs).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS));
+    if (cfg.glb) this.attachGlbCharacter(cfg.glb);
     this.recoil = 0; this.spinV = 0; this.shieldT = 0; this.moodT = 0; this.t = U.rand(0, 10);
     this.baseScale = s;
     this.sayCd = 0;
@@ -2677,6 +2764,61 @@ class NPC {
       z.body.setLinvel({ x: this.velX, y: 0, z: this.velZ }, false);
     }
   }
+  // Skinned GLB character (chibi customer/boss): hides the procedural body,
+  // keeps the physics zones + speech bubbles + hit logic untouched.
+  attachGlbCharacter(manifestKey) {
+    const cached = gltfCache.get(manifestKey);
+    const entry = ASSET_MANIFEST[manifestKey];
+    if (!cached || !entry) return false;
+    const model = SkeletonUtils.clone(cached.scene);
+    const bbox = new THREE.Box3().setFromObject(model);
+    const h = bbox.getSize(new THREE.Vector3()).y || 1;
+    model.scale.setScalar((entry.glbHeight || 1.9) / h);
+    const b2 = new THREE.Box3().setFromObject(model);
+    const ctr = b2.getCenter(new THREE.Vector3());
+    model.position.set(-ctr.x, -b2.min.y, -ctr.z);
+    this.glbTintMats = [];
+    const tint = new THREE.Color(this.cfg.tint || 0xffffff);
+    model.traverse(o => {
+      if (o.isMesh) {
+        o.frustumCulled = false;   // skinned bounds lie about the frustum — never cull
+        o.castShadow = SHADOWS; o.receiveShadow = SHADOWS;
+        if (o.material) {
+          o.material = o.material.clone();
+          o.material.roughness = 0.42; o.material.metalness = 0.05;
+          o.material.color.multiply(tint);
+          o.material.needsUpdate = true;
+          this.glbTintMats.push({ m: o.material, base: o.material.color.clone() });
+        }
+      }
+    });
+    // hide the procedural body meshes BEFORE adding the model (keep laser beams),
+    // then swap in the skinned chibi
+    this.group.traverse(o => { if (o.isMesh && o.parent !== this.lasers) o.visible = false; });
+    this.group.add(model);
+    this.glbModel = model;
+    // cloned SkinnedMeshes carry stale bind matrices from the source file —
+    // rebind against identity once the model sits in the world
+    this.group.updateMatrixWorld(true);
+    model.traverse(o => { if (o.isSkinnedMesh) o.bind(o.skeleton, new THREE.Matrix4()); });
+    this.mixer = new THREE.AnimationMixer(model);
+    this.glbClips = {};
+    (cached.animations || []).forEach(clip => { this.glbClips[clip.name.toLowerCase()] = clip; });
+    this.activeAction = null; this.clipUntil = 0;
+    this.playClip(/^(idle|standing)$/i);
+    return true;
+  }
+  playClip(pattern, fade = 0.22) {
+    if (!this.mixer || !this.glbClips) return false;
+    const hit = Object.entries(this.glbClips).find(([name]) => pattern.test(name));
+    if (!hit) return false;
+    const next = this.mixer.clipAction(hit[1]);
+    if (next === this.activeAction) return true;
+    next.reset().fadeIn(fade).play();
+    if (this.activeAction) this.activeAction.fadeOut(fade);
+    this.activeAction = next;
+    return true;
+  }
   headWorldPos() {
     _v2.set(0, 1.95 * this.baseScale, 0);
     this.group.localToWorld(_v2);
@@ -2692,6 +2834,10 @@ class NPC {
     const es = U.lerp(1, 1.4, t);
     this.eyes.forEach(e => e.scale.setScalar(es));
     this.mouth.scale.set(1 + t * 0.7, 1 + t * 1.8, 1);
+    if (this.glbTintMats) {
+      const rageC = new THREE.Color(0xff2a2a);
+      this.glbTintMats.forEach(({ m, base }) => m.color.copy(base).lerp(rageC, t * 0.55));
+    }
     this.moodT = t;
   }
   react(type, pos) {
@@ -2700,6 +2846,7 @@ class NPC {
     else if (type === 'bump') this.recoil = Math.max(this.recoil, 0.25);
     else if (type === 'witness') { this.recoil = Math.max(this.recoil, 0.45); this.shieldT = Math.max(this.shieldT, 0.7); }
     else if (type === 'happy') this.happyT = 1.3;
+    if (this.mixer && (type === 'headhit' || type === 'hit')) { this.playClip(/punch/i); this.clipUntil = U.now() + 900; }
     bus.emit(EV.NPC_REACTION, { type });
   }
   sayMaybe(prob = 0.6) {
@@ -2711,6 +2858,7 @@ class NPC {
     const tier = r <= 20 ? 'calm' : r <= 40 ? 'annoyed' : r <= 60 ? 'angry' : r <= 80 ? 'furious' : 'extreme';
     const arr = this.cfg.boss ? (BOSS_LINES[tier] || BOSS_LINES.calm) : (this.lines[tier] || this.lines.calm);
     sayBubble(this, U.pick(arr));
+    if (this.mixer) { this.playClip(/^(yes|no|wave)\b/i); this.clipUntil = U.now() + 1500; }
   }
   update(dt) {
     if (!this.alive) return;
@@ -2720,6 +2868,10 @@ class NPC {
     this.happyT = Math.max(0, this.happyT - dt);
     this.spinV *= Math.pow(0.05, dt);
     this.group.rotation.y += this.spinV * dt;
+    if (this.mixer) {
+      if (this.clipUntil && U.now() > this.clipUntil) { this.playClip(/^(idle|standing)$/i); this.clipUntil = 0; }
+      this.mixer.update(dt * (1 + game.rage / 70));   // chibi gets frantic as Rage climbs
+    }
     // walking toward a counter / order spot
     let walking = false;
     if (this.walkTarget) {
@@ -3082,7 +3234,7 @@ function levelOffice() {
       defineObjective('shred_vip', 'VIP CONTRACT SHREDDED 🗂', 25);
       defineObjective('phone_assault', 'PHONE ASSAULT ☎️🤕', 15);
       // ----- NPC -----
-      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1 });
+      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glb: 'npcCustomer', tint: 0xffb4a2 });
       npcs.push(npc);
       const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss1);
@@ -3183,7 +3335,7 @@ function levelKitchen() {
       defineObjective('boot_served', 'FRIED BOOT SERVED 🥾🍟', 14);
       defineObjective('empty_order', 'EMPTY ORDER 🍽', 15);
       defineObjective('extinguisher', 'EXTINGUISHER CHAOS 🧯', 17);
-      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02 });
+      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02, glb: 'npcCustomer', tint: 0xffcc00 });
       npcs.push(npc);
       const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss2);
@@ -3271,7 +3423,7 @@ function levelService() {
       defineObjective('reject_trash', 'REFUND DENIED & TOSSED 🗑', 14);
       defineObjective('hotline', 'DESTROY HOTLINE ☎️💥', 18);
       defineObjective('water', 'WATER DISASTER 💧⚡', 20);
-      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0 });
+      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glb: 'npcCustomer', tint: 0x70c1b3 });
       npcs.push(npc);
       const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss3);
@@ -3354,7 +3506,7 @@ function levelSales() {
       defineObjective('discount', '99% DISCOUNT 📉😱', 22);
       defineObjective('pos_smash', 'CHAMPAGNE POS SMASH 🍾⚡', 20);
       defineObjective('gift_exit', 'VIP GIFT THROWN OUT 🎁🚪', 20);
-      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02 });
+      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, glb: 'npcCustomer', tint: 0x8a93b8 });
       npcs.push(client);
       npc = client;
       const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
@@ -3915,8 +4067,9 @@ function frame(t) {
 async function boot() {
   try {
     game.state = 'INIT';
-    loading(28, 'Initializing Rapier WASM…');
+    loading(20, 'Initializing Rapier WASM…');
     await RAPIER.init();
+    await loadAssets((d, n, key) => loading(30 + Math.round(d / n * 25), 'Loading 3D model: ' + key + '…'));
     loading(55, 'Creating renderer…');
     initThree();
     createWorld();
@@ -3995,6 +4148,24 @@ window.YF = {
   objectives: () => { const o = {}; for (const k in game.objectives) o[k] = game.objectives[k].done; return o; },
   secrets: () => [...unlockedSecrets],
   reps: () => [...repCounts.entries()],
+  gltfLoaded: () => [...gltfCache.keys()],
+
+
+
+  npcGlbDebug: () => {
+    if (!npc || !npc.glbModel) return null;
+    const m = npc.glbModel;
+    const b = new THREE.Box3().setFromObject(m);
+    let meshes = 0, visible = 0;
+    m.traverse(o => { if (o.isMesh) { meshes++; if (o.visible) visible++; } });
+    return {
+      world: m.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(2)),
+      scale: +m.scale.x.toFixed(3), vis: m.visible,
+      height: +b.getSize(new THREE.Vector3()).y.toFixed(2),
+      meshes, visible,
+      groupVis: npc.group.visible,
+    };
+  },
   bossLook: () => game.bossNpc ? {
     skin: '#' + game.bossNpc.skinMat.color.getHexString(),
     hair: game.bossNpc.bossHairMat ? '#' + game.bossNpc.bossHairMat.color.getHexString() : null,
