@@ -80,10 +80,12 @@ await waitState('PLAYING', 25000);
 T('L1: reached PLAYING', true);
 await sleep(900);
 // the boss: orange-tanned caricature with the golden swoop and long red tie
+// (checked before any chaos so the procedural skin hex is pristine)
 const bossLook = await page.evaluate(() => YF.bossLook());
 T('boss: caricature look (orange skin, blonde swoop, red tie)',
   !!bossLook && bossLook.skin === '#ee9c50' && bossLook.hair === '#f3cf6b' && bossLook.tie === '#d63c2e',
   JSON.stringify(bossLook));
+await waitNpcSettled();   // colleague walks to her order spot early — wait her out
 const gltfKeys = await page.evaluate(() => YF.gltfLoaded());
 T('glb: loader pipeline end-to-end (cube.glb cached)', gltfKeys.includes('pipelineTest'), JSON.stringify(gltfKeys));
 const mugBefore = await page.evaluate(() => YF.pos('mug'));
@@ -102,8 +104,6 @@ const heldDist = await page.evaluate(() => {
 T('L1: mug carried in front of player', heldDist < 2.3, 'dist=' + heldDist.toFixed(2));
 
 // aim at NPC torso, flick forward, release → throw + rage (retry: flick timing varies)
-// wait for the colleague to finish her scripted walk first — moving targets flake
-await waitNpcSettled();
 const rageBefore = await page.evaluate(() => YF.rage());
 let threw = false;
 for (let attempt = 0; attempt < 3 && !threw; attempt++) {

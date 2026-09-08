@@ -15,7 +15,7 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PALETTE = {
     "skin_tan": (0.91, 0.62, 0.35, 1),
     "skin_light": (0.95, 0.76, 0.55, 1),
-    "skin_orange": (0.93, 0.55, 0.26, 1),
+    "skin_orange": (0.89, 0.5, 0.22, 1),
     "hair_brown": (0.28, 0.16, 0.08, 1),
     "hair_gold": (0.95, 0.8, 0.35, 1),
     "hair_black": (0.06, 0.05, 0.05, 1),
@@ -41,9 +41,11 @@ VARIANTS = {
     # the reference character: Overcooked chef
     "chef": dict(skin="skin_light", body="red", hair="hair_brown", hat="white",
                  apron=True, nose="nose_red", grin=True, scarf=True),
-    # the boss: navy suit, long red tie, golden swoop, orange tan, jowls
+    # the boss: navy suit, oversized striped tie, golden wave-ridge swoop,
+    # orange tan, huge toothy grin, furrowed brows, jowls
     "boss": dict(skin="skin_orange", body="navy", hair="hair_gold", hat=None,
-                 tie="red", nose="nose_red", jowl=True, stern=True, suit=True),
+                 tie="red", nose="nose_red", jowl=True, grin="big", suit=True,
+                 furrow=True, pin=True),
     # L1 office colleague: coral, bob hair, glasses, lanyard
     "colleague": dict(skin="skin_tan", body="coral", hair="hair_black", hat=None,
                       glasses=True, lanyard=True, smile=True),
@@ -137,9 +139,23 @@ def build_character(kind):
     prim("cube", f"{kind}_footR", (0.2, 0.3, 0.12), (0.16, -0.04, 0.06), mat=mat("dark"))
 
     if v.get("suit"):
-        prim("cube", f"{kind}_shirt", (0.22, 0.1, 0.38), (0, -0.3, 0.55), mat=mat("white"))
-        tie_m = mat(v["tie"]) if v.get("tie") in PALETTE else make_mat(f"{kind}_tie_c", PALETTE["purple"])
-        prim("cube", f"{kind}_tie", (0.1, 0.05, 0.46), (0, -0.33, 0.5), mat=tie_m)
+        # white shirt V + stubby suit arms with white cuffs
+        prim("cube", f"{kind}_shirt", (0.22, 0.1, 0.3), (0, -0.3, 0.68), mat=mat("white"))
+        for sx in (-1, 1):
+            prim("sphere", f"{kind}_arm{sx}", (0.1, 0.1, 0.17), (0.47 * sx, -0.02, 0.5),
+                 rot=(0, 0, sx * 0.5), mat=body_m)
+            prim("sphere", f"{kind}_cuff{sx}", (0.075, 0.075, 0.075), (0.55 * sx, -0.05, 0.4),
+                 mat=mat("white"))
+            prim("sphere", f"{kind}_hand{sx}", (0.095, 0.095, 0.11), (0.6 * sx, -0.08, 0.31),
+                 mat=skin)
+    if kind == "boss":
+        # oversized red tie with gold diagonal stripes
+        prim("cube", f"{kind}_tie", (0.13, 0.06, 0.55), (0, -0.36, 0.55), mat=mat("red"))
+        for i in range(3):
+            prim("cube", f"{kind}_stripe{i}", (0.14, 0.07, 0.05),
+                 (0, -0.38, 0.68 - i * 0.14), rot=(0, math.radians(38), 0), mat=mat("gold"))
+        prim("cube", f"{kind}_flagpin", (0.05, 0.025, 0.035), (-0.12, -0.33, 0.72),
+             mat=mat("red"))
 
     if v.get("apron"):
         apron_m = mat("white") if kind == "chef" else mat("cream")
@@ -161,8 +177,10 @@ def build_character(kind):
     if v.get("grin"):
         prim("sphere", f"{kind}_mouth", (0.24, 0.09, 0.14), (0, -0.38, 1.08), mat=mat("mouth_dark"))
         prim("cube", f"{kind}_teeth", (0.3, 0.05, 0.08), (0, -0.44, 1.14), mat=mat("white"))
-    elif v.get("stern"):
-        prim("cube", f"{kind}_mouth", (0.16, 0.06, 0.03), (0, -0.44, 1.14), mat=mat("mouth_dark"))
+    elif v.get("grin") == "big":
+        prim("sphere", f"{kind}_mouth", (0.26, 0.1, 0.15), (0, -0.4, 1.08), mat=mat("mouth_dark"))
+        prim("cube", f"{kind}_teeth", (0.34, 0.06, 0.11), (0, -0.45, 1.15), mat=mat("white"))
+        prim("cube", f"{kind}_lip", (0.28, 0.04, 0.05), (0, -0.42, 1.0), mat=skin)
     else:
         prim("sphere", f"{kind}_mouth", (0.1, 0.05, 0.05), (0, -0.44, 1.12), mat=mat("mouth_dark"))
 
@@ -179,16 +197,30 @@ def build_character(kind):
         prim("sphere", f"{kind}_eyeH{sx}", (0.016, 0.014, 0.016), (0.23 * sx, -0.46, 1.46),
              mat=mat("white"))
 
+    # ---- furrowed golden brows ----
+    if v.get("furrow"):
+        for sx in (-1, 1):
+            prim("cube", f"{kind}_brow{sx}", (0.17, 0.05, 0.045), (0.18 * sx, -0.4, 1.54),
+                 rot=(0, 0, sx * 0.35), mat=mat("hair_gold"))
+
     # ---- hair ----
     if v.get("hair"):
         hm = mat(v["hair"])
         if kind == "boss":
-            prim("sphere", f"{kind}_hairDome", (0.46, 0.42, 0.36), (0, 0.04, 1.52), mat=hm)
-            prim("sphere", f"{kind}_hairSwoop", (0.42, 0.2, 0.14), (0, -0.26, 1.62),
-                 rot=(-0.35, 0, 0), mat=hm)
+            # iconic swoop: dome + forward flip + layered wave ridges
+            prim("sphere", f"{kind}_hairDome", (0.47, 0.46, 0.4), (0, 0.05, 1.5), mat=hm)
+            prim("sphere", f"{kind}_hairFlip", (0.52, 0.26, 0.2), (0.02, -0.34, 1.6),
+                 rot=(-0.45, 0, 0.12), mat=hm)
+            for i, off in enumerate((-0.14, 0.0, 0.14, 0.28)):
+                ridge = prim("sphere", f"{kind}_hairRidge{i}",
+                             (0.44 - i * 0.05, 0.13, 0.11),
+                             (off * 0.5, -0.16 + i * 0.03, 1.64 - i * 0.045),
+                             rot=(-0.4, 0, off * 0.25), mat=hm)
+                del ridge
             for sx in (-1, 1):
-                prim("sphere", f"{kind}_hairSide{sx}", (0.14, 0.14, 0.22),
-                     (0.44 * sx, 0, 1.36), mat=hm)
+                prim("sphere", f"{kind}_hairSide{sx}", (0.15, 0.16, 0.26),
+                     (0.45 * sx, 0.02, 1.4), mat=hm)
+            prim("sphere", f"{kind}_hairBack", (0.4, 0.32, 0.36), (0, 0.12, 1.36), mat=hm)
         elif kind == "colleague":
             prim("sphere", f"{kind}_hairBob", (0.5, 0.46, 0.3), (0, 0.03, 1.5), mat=hm)
         elif kind == "chef":

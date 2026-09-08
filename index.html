@@ -4258,6 +4258,10 @@ window.YF = {
   secrets: () => [...unlockedSecrets],
   reps: () => [...repCounts.entries()],
   gltfLoaded: () => [...gltfCache.keys()],
+  rayGrab: (nx = 0, ny = 0) => {
+    const hit = pickFromNDC(nx, ny, true);
+    return hit ? { type: hit.ent.type, dist: +hit.dist.toFixed(2), reach: hit.dist <= GRAB_REACH } : null;
+  },
 
 
 
