@@ -7,6 +7,7 @@ All models referenced by `ASSET_MANIFEST` in `index.html` are CC0 / permissively
 | `npcCustomer` (fallback CDN) | [three.js examples — RobotExpressive](https://github.com/mrdoob/three.js/tree/r160/examples/models/gltf/RobotExpressive) by Tomás Laulhé | CC0 |
 | Optional Kenney drops | [kenney.nl](https://kenney.nl) Food Kit / Furniture Kit | CC0 |
 | Optional Quaternius drops | [quaternius.com](https://quaternius.com) | CC0 |
+| `*.glb` character models (boss, chef, colleague, customer, complainer, client) | Built procedurally in Blender 5.2 via `tools/blender_character_builder.py` (primitives + subsurf, clay PBR) | CC0 |
 
 ## How to vendor a model
 

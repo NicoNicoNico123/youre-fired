@@ -1382,14 +1382,14 @@ const ASSET_MANIFEST = {
   // flattens this model's bone hierarchy (bones collapse to a point — debugged via
   // YF.npcGlbDebug / YF.glbRenderInfo). Flip enabled:true once a suitable chibi GLB
   // clones cleanly; NPC.attachGlbCharacter + playClip are already wired.
-  npcCustomer: {
-    enabled: false,
-    url: 'assets/npc_customer.glb',
-    cdn: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
-    glbHeight: 1.9,
-    clips: { idle: /^(idle|standing)$/i, angry: /punch/i, talk: /^(yes|no|wave)\b/i },
-  },
-  npcBoss: { enabled: false, url: 'assets/npc_boss.glb', glbHeight: 2.05 },   // optional chibi boss skin
+  // Blender-built chibi characters (tools/blender_character_builder.py) —
+  // modeled on Ref/Nintendo_Profile_Buck_v01 (Overcooked chef style)
+  npcCustomer: { enabled: true, url: 'assets/characters/customer.glb', glbHeight: 1.9 },
+  npcColleague: { url: 'assets/characters/colleague.glb', glbHeight: 1.9 },
+  npcComplainer: { url: 'assets/characters/complainer.glb', glbHeight: 1.9 },
+  npcClient: { url: 'assets/characters/client.glb', glbHeight: 1.9 },
+  npcBoss: { enabled: true, url: 'assets/characters/boss.glb', glbHeight: 2.05 },
+  npcChef: { url: 'assets/characters/chef.glb', glbHeight: 2.05 },
   bossFigurine: { url: 'assets/bossFigurine.glb' },        // generated via FastMCP (tools/mcp_server.py)
   customerFigurine: { url: 'assets/customerFigurine.glb' },
   pipelineTest: { url: 'assets/cube.glb' },   // proves the loader path end-to-end at boot
@@ -3336,9 +3336,9 @@ function levelOffice() {
       defineObjective('shred_vip', 'VIP CONTRACT SHREDDED 🗂', 25);
       defineObjective('phone_assault', 'PHONE ASSAULT ☎️🤕', 15);
       // ----- NPC -----
-      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glasses: true, lanyard: true, glb: 'npcCustomer', tint: 0xffb4a2 });
+      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glasses: true, lanyard: true, glb: 'npcColleague', tint: 0xffb4a2 });
       npcs.push(npc);
-      const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
+      const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss1);
       game.bossNpc = boss1;
       // ----- secrets hooks -----
@@ -3439,7 +3439,7 @@ function levelKitchen() {
       defineObjective('extinguisher', 'EXTINGUISHER CHAOS 🧯', 17);
       npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02, cap: 0xff3b30, blush: true, glb: 'npcCustomer', tint: 0xffcc00 });
       npcs.push(npc);
-      const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
+      const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss2);
       game.bossNpc = boss2;
       game.levelHook = {};
@@ -3525,9 +3525,9 @@ function levelService() {
       defineObjective('reject_trash', 'REFUND DENIED & TOSSED 🗑', 14);
       defineObjective('hotline', 'DESTROY HOTLINE ☎️💥', 18);
       defineObjective('water', 'WATER DISASTER 💧⚡', 20);
-      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glasses: true, blush: true, glb: 'npcCustomer', tint: 0x70c1b3 });
+      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glasses: true, blush: true, glb: 'npcComplainer', tint: 0x70c1b3 });
       npcs.push(npc);
-      const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
+      const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss3);
       game.bossNpc = boss3;
       game.ringing = true;
@@ -3610,10 +3610,10 @@ function levelSales() {
       defineObjective('discount', '99% DISCOUNT 📉😱', 22);
       defineObjective('pos_smash', 'CHAMPAGNE POS SMASH 🍾⚡', 20);
       defineObjective('gift_exit', 'VIP GIFT THROWN OUT 🎁🚪', 20);
-      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, briefcase: true, glb: 'npcCustomer', tint: 0x8a93b8 });
+      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, briefcase: true, glb: 'npcClient', tint: 0x8a93b8 });
       npcs.push(client);
       npc = client;
-      const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
+      const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss);
       game.bossNpc = boss;
       game.levelHook = {
