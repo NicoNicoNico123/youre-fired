@@ -1390,6 +1390,8 @@ const ASSET_MANIFEST = {
     clips: { idle: /^(idle|standing)$/i, angry: /punch/i, talk: /^(yes|no|wave)\b/i },
   },
   npcBoss: { enabled: false, url: 'assets/npc_boss.glb', glbHeight: 2.05 },   // optional chibi boss skin
+  bossFigurine: { url: 'assets/bossFigurine.glb' },        // generated via FastMCP (tools/mcp_server.py)
+  customerFigurine: { url: 'assets/customerFigurine.glb' },
   pipelineTest: { url: 'assets/cube.glb' },   // proves the loader path end-to-end at boot
   mug: { url: 'assets/mug.glb' },
   laptop: { url: 'assets/laptop.glb' },
@@ -1917,6 +1919,14 @@ const PROP_DEFS = {
       h1.position.set(0.11, 0.1, 0); h1.rotation.z = -Math.PI / 2; g.add(h1);
       const h2 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.016, 8, 14, Math.PI), M(PAL.gold));
       h2.position.set(-0.11, 0.1, 0); h2.rotation.z = Math.PI / 2; g.add(h2);
+    }
+  },
+  figurine: {
+    label: 'Boss Figurine', mass: 0.45, traits: ['grabbable', 'throwable'], size: [0.22, 0.36, 0.22],
+    meta: { figurine: true },
+    build(g) {
+      bx(g, 0.16, 0.05, 0.16, PAL.slateLight, 0, -0.025, 0);                 // pedestal (GLB character stands on it)
+      bx(g, 0.17, 0.012, 0.05, PAL.gold, 0, -0.058, 0.07);                   // nameplate
     }
   },
 };
@@ -3577,6 +3587,8 @@ function levelSales() {
       spawnProp('brochure', -1.1, 0.9, 3.22, { rotY: 0.1 });
       spawnProp('pen', 2.1, 0.92, 2.6);
       spawnProp('folder', -2.0, 0.92, 2.95);
+      spawnProp('figurine', 2.9, 1.08, 3.15);   // boss figurine (GLB via FastMCP forge)
+      spawnProp('figurine', -2.7, 1.08, 3.15);  // customer figurine (GLB via FastMCP forge)
       spawnProp('giftBasket', 3.6, 1.05, 0.9);
       defineObjective('discount', '99% DISCOUNT 📉😱', 22);
       defineObjective('pos_smash', 'CHAMPAGNE POS SMASH 🍾⚡', 20);
@@ -3587,7 +3599,12 @@ function levelSales() {
       const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss);
       game.bossNpc = boss;
-      game.levelHook = {};
+      game.levelHook = {
+        onNpcHit(npcRef, obj, zone, pos, rel) {
+          if (obj.type === 'figurine' && npcRef === game.bossNpc && rel > 4)
+            unlockSecret('mirror_match', 'MIRROR MATCH 🪞💥', 8, pos);
+        },
+      };
     },
   };
 }
@@ -4241,6 +4258,7 @@ window.YF = {
       groupVis: npc.group.visible,
     };
   },
+  bossPos: () => game.bossNpc ? game.bossNpc.headWorldPos().toArray() : null,
   bossLook: () => game.bossNpc ? {
     skin: '#' + game.bossNpc.skinMat.color.getHexString(),
     hair: game.bossNpc.bossHairMat ? '#' + game.bossNpc.bossHairMat.color.getHexString() : null,

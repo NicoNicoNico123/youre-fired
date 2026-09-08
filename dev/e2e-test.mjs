@@ -393,6 +393,21 @@ await sleep(600);
 await page.evaluate(([x, y, z]) => YF.teleport('model', x, y, z), [ex.x, ex.y, ex.z]);
 const both4 = await Promise.all([waitSecret('liquid_asset'), waitSecret('real_estate_exit')]);
 T('L4: secrets champagne+contract, model+exit', both4[0] && both4[1], (await page.evaluate(() => YF.secrets().join(', '))));
+// figurines on the desk
+const figCount = await page.evaluate(() => YF.props().filter(p => p.startsWith('figurine:1')).length);
+T('L4: boss figurines on desk', figCount === 2, 'count=' + figCount);
+// Mirror Match on a fresh stage (a mid-test win would freeze physics)
+await page.evaluate(() => YF.startRun(3));
+await waitState('PLAYING', 25000);
+await sleep(500);
+let mirror = false;
+for (let k = 0; k < 3 && !mirror; k++) {
+  const bp = await page.evaluate(() => YF.bossPos());
+  if (!bp) break;
+  await page.evaluate(([x, y, z]) => YF.teleport('figurine', x, y + 1.0, z), [bp[0], bp[1], bp[2]]);
+  mirror = await waitSecret('mirror_match', 5000);
+}
+T('L4: secret mirror match (figurine vs boss)', mirror);
 const r4 = await page.evaluate(() => YF.rage());
 console.log('  L4 rage: ' + r4.toFixed(1) + ' secrets: ' + (await page.evaluate(() => YF.secrets().join(', '))));
 await page.screenshot({ path: SHOTS + '06-level4.png' });
@@ -401,8 +416,12 @@ await page.screenshot({ path: SHOTS + '06-level4.png' });
 await page.evaluate(() => YF.addRage(101 - YF.rage()));
 await sleep(300);
 T('climax: state MEME', await state() === 'MEME');
-await sleep(1100);
-T('climax: YOU ARE FIRED overlay visible', await page.isVisible('#climax'));
+let overlaySeen = false;
+try {
+  await page.waitForFunction(() => { const c = document.querySelector('#climax'); return c && !c.classList.contains('hidden'); }, null, { timeout: 6000 });
+  overlaySeen = true;
+} catch (e) {}
+T('climax: YOU ARE FIRED overlay visible', overlaySeen);
 T('climax: boss speech bubble shown', await page.locator('#layer .bubble').count() >= 1);
 await page.screenshot({ path: SHOTS + '07-climax.png' });
 await waitState('RESULT', 8000);
