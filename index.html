@@ -377,6 +377,14 @@
     var r = e.reason; window.__fatal((r && (r.message || r)) || 'Promise rejection');
   });
 </script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 <script type="module">
 /* ============================================================================
    SPEEDRUN: YOU'RE FIRED! 《鬥快被炒魷魚！》
@@ -386,6 +394,7 @@
              director · timer · leaderboard · ui · loop
 ============================================================================ */
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm';
 
 const $ = s => document.querySelector(s);
@@ -494,11 +503,20 @@ function windowTex(color1, color2) {
 }
 
 /* --------------------------------------------------- materials & geometry */
+// Designer-vinyl / clay-toy PBR profile: soft matte clay by default,
+// deliberate metal accents on request. Roughness is clamped to 0.38–0.48.
 const _matCache = new Map();
 function M(color, opts = {}) {
   const key = 'm' + color + JSON.stringify(opts);
   if (_matCache.has(key)) return _matCache.get(key);
-  const m = new THREE.MeshLambertMaterial(Object.assign({ color }, opts));
+  const metal = !!opts.metal;
+  const m = new THREE.MeshStandardMaterial({
+    color,
+    roughness: metal ? 0.25 : U.clamp(opts.rough != null ? opts.rough : 0.43, 0.38, 0.48),
+    metalness: metal ? 0.65 : 0.0,
+  });
+  if (opts.side) m.side = opts.side;
+  if (opts.transparent) { m.transparent = true; m.opacity = opts.opacity != null ? opts.opacity : 1; }
   _matCache.set(key, m);
   return m;
 }
@@ -510,11 +528,29 @@ function MB(color, opts = {}) {
   return m;
 }
 const _geoCache = new Map();
-function GB(w, h, d) { const k = 'b' + w + ',' + h + ',' + d; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.BoxGeometry(w, h, d)); return _geoCache.get(k); }
-function GC(rt, rb, h, s = 12) { const k = 'c' + rt + ',' + rb + ',' + h + ',' + s; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.CylinderGeometry(rt, rb, h, s)); return _geoCache.get(k); }
-function GS(r, s = 10) { const k = 's' + r + ',' + s; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.SphereGeometry(r, s, Math.max(6, s >> 1))); return _geoCache.get(k); }
-function GCap(r, l) { const k = 'p' + r + ',' + l; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.CapsuleGeometry(r, l, 4, 8)); return _geoCache.get(k); }
-function GCone(r, h, s = 10) { const k = 'k' + r + ',' + h; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.ConeGeometry(r, h, s)); return _geoCache.get(k); }
+// every box in the game gets a soft injection-molded bevel — no knife edges
+function GB(w, h, d) {
+  const k = 'b' + w + ',' + h + ',' + d;
+  if (!_geoCache.has(k)) {
+    const mn = Math.min(w, h, d);
+    const r = U.clamp(mn * 0.16, 0.004, mn * 0.45);
+    _geoCache.set(k, new RoundedBoxGeometry(w, h, d, 3, r));
+  }
+  return _geoCache.get(k);
+}
+function GC(rt, rb, h, s = 18) { const k = 'c' + rt + ',' + rb + ',' + h + ',' + s; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.CylinderGeometry(rt, rb, h, s)); return _geoCache.get(k); }
+function GS(r, s = 12) { const k = 's' + r + ',' + s; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.SphereGeometry(r, s, Math.max(6, s >> 1))); return _geoCache.get(k); }
+function GCap(r, l) { const k = 'p' + r + ',' + l; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.CapsuleGeometry(r, l, 6, 12)); return _geoCache.get(k); }
+function GCone(r, h, s = 12) { const k = 'k' + r + ',' + h; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.ConeGeometry(r, h, s)); return _geoCache.get(k); }
+function GTor(r, t) { const k = 't' + r + ',' + t; if (!_geoCache.has(k)) _geoCache.set(k, new THREE.TorusGeometry(r, t, 10, 18)); return _geoCache.get(k); }
+function tor(parent, r, t, color, x, y, z, opts = {}) {
+  const m = new THREE.Mesh(GTor(r, t), opts.basic ? MB(color, opts.mat) : M(color, opts.mat));
+  m.position.set(x, y, z);
+  if (opts.rx) m.rotation.x = opts.rx; if (opts.ry) m.rotation.y = opts.ry; if (opts.rz) m.rotation.z = opts.rz;
+  m.castShadow = SHADOWS;
+  parent.add(m);
+  return m;
+}
 function GTex(tex, w, h) {
   const m = new THREE.Mesh(GB(w, h, 0.02), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
   return m;
@@ -698,32 +734,20 @@ function initThree() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
   SHADOWS = !U.isMobile;
   if (SHADOWS) {
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
   $('#app').appendChild(renderer.domElement);
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1626);
+  scene.background = new THREE.Color(PALETTE.sky);
   camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 120);
   camera.rotation.order = 'YXZ';
   raycaster = new THREE.Raycaster();
   buildHands();
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x554e6e, 1.25);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xfff1d6, 1.5);
-  dir.position.set(7, 14, 8);
-  if (SHADOWS) {
-    dir.castShadow = true;
-    dir.shadow.mapSize.set(1024, 1024);
-    dir.shadow.camera.left = -13; dir.shadow.camera.right = 13;
-    dir.shadow.camera.top = 13; dir.shadow.camera.bottom = -13;
-    dir.shadow.camera.far = 40;
-    dir.shadow.bias = -0.0015;
-  }
-  scene.add(dir);
-  scene.add(new THREE.AmbientLight(0x9a8cc0, 0.5));
 }
 function layoutCamera() {
   const aspect = window.innerWidth / window.innerHeight;
@@ -773,6 +797,10 @@ function removeEntity(e) {
   [e.collider, ...(e.collidersExtra || [])].forEach(c => { if (c) collMap.delete(c.handle); });
   if (e.body && world) { try { world.removeRigidBody(e.body); } catch (err) {} }
   e.body = null; e.collider = null; e.collidersExtra = null;
+  if (e.meta && e.meta.shadow) {
+    if (e.meta.shadow.parent) e.meta.shadow.parent.remove(e.meta.shadow);
+    e.meta.shadow = null;
+  }
   if (e.mesh && e.mesh.parent) e.mesh.parent.remove(e.mesh);
 }
 function entByCollider(handle) { return collMap.get(handle) || null; }
@@ -789,20 +817,25 @@ function clearStageObjects() {
 }
 function initSceneContents() {
   scene.add(camera);
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x554e6e, 1.25);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xfff1d6, 1.5);
-  dir.position.set(7, 14, 8);
+  // Overcooked studio lighting: warm key + soft shadows, candy-hemisphere bounce,
+  // cool rim from the upper rear to pop props off the background
+  const key = new THREE.DirectionalLight(0xfff5e6, 1.8);
+  key.position.set(6, 12, 7);
   if (SHADOWS) {
-    dir.castShadow = true;
-    dir.shadow.mapSize.set(1024, 1024);
-    dir.shadow.camera.left = -13; dir.shadow.camera.right = 13;
-    dir.shadow.camera.top = 13; dir.shadow.camera.bottom = -13;
-    dir.shadow.camera.far = 40;
-    dir.shadow.bias = -0.0015;
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.left = -13; key.shadow.camera.right = 13;
+    key.shadow.camera.top = 13; key.shadow.camera.bottom = -13;
+    key.shadow.camera.far = 40;
+    key.shadow.bias = -0.0012;
+    key.shadow.radius = 4;
   }
-  scene.add(dir);
-  scene.add(new THREE.AmbientLight(0x9a8cc0, 0.5));
+  scene.add(key);
+  scene.add(new THREE.HemisphereLight(0xe0f7fa, 0xffe0b2, 0.8));
+  const rim = new THREE.DirectionalLight(0x80d8ff, 0.6);
+  rim.position.set(-5, 9, -9);
+  scene.add(rim);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.12));
   scene.add(pools.spark.points, pools.puff.points);
   scene.add(grab.marker);
 }
@@ -974,10 +1007,10 @@ const _hands = {};
 function buildHands() {
   const mk = side => {
     const g = new THREE.Group();
-    const mitt = new THREE.Mesh(GS(0.068, 10), new THREE.MeshLambertMaterial({ color: 0xe8b48c }));
+    const mitt = new THREE.Mesh(GS(0.068, 10), new THREE.MeshStandardMaterial({ color: 0xe8b48c, roughness: 0.45, metalness: 0 }));
     mitt.scale.set(1, 0.82, 1.15);
     g.add(mitt);
-    const arm = new THREE.Mesh(GCap(0.045, 0.22), new THREE.MeshLambertMaterial({ color: 0x3d5a80 }));
+    const arm = new THREE.Mesh(GCap(0.045, 0.22), new THREE.MeshStandardMaterial({ color: 0x3d5a80, roughness: 0.45, metalness: 0 }));
     arm.position.set(0, -0.03, 0.2);
     arm.rotation.x = 1.25;
     g.add(arm);
@@ -1300,12 +1333,59 @@ function updateMarker(dt) {
   grab.markerFade = 1;
 }
 
+/* -------------------------------------------- per-prop contact shadows --- */
+const blobTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g2 = c.getContext('2d');
+  const grd = g2.createRadialGradient(64, 64, 8, 64, 64, 62);
+  grd.addColorStop(0, 'rgba(20,24,30,0.55)');
+  grd.addColorStop(0.7, 'rgba(20,24,30,0.28)');
+  grd.addColorStop(1, 'rgba(20,24,30,0)');
+  g2.fillStyle = grd; g2.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const blobGeo = new THREE.PlaneGeometry(1, 1);
+function addPropShadow(e) {
+  const m = new THREE.Mesh(blobGeo, new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, opacity: 0.3, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.renderOrder = 2;
+  e.meta.shadow = m;
+  scene.add(m);
+}
+function updatePropShadows() {
+  for (const e of entities.values()) {
+    const sh = e.meta && e.meta.shadow;
+    if (!sh || !e.alive) continue;
+    const p = e.body.translation();
+    let sy = 0.02;
+    for (const s of surfaces) {
+      if (p.x > s.minX && p.x < s.maxX && p.z > s.minZ && p.z < s.maxZ && s.y <= p.y) sy = Math.max(sy, s.y + 0.02);
+    }
+    const h = p.y - sy;
+    const k = U.clamp(1 - h / 2.2, 0, 1);
+    sh.position.set(p.x, sy + 0.012, p.z);
+    sh.scale.setScalar(0.5 + k * 0.55);
+    sh.material.opacity = 0.32 * k * k;
+    sh.visible = k > 0.04 && e !== grab.ent;
+  }
+}
+
 /* --------------------------------------------------------- prop catalogue */
+// Overcooked-style candy palette: high-saturation accents, warm pastel surfaces
+const PALETTE = {
+  red: 0xff3b30, gold: 0xffcc00, coral: 0xff6b6b,
+  mint: 0x70c1b3, cream: 0xf7f7f2, slate: 0x2e4057,
+  mintDeep: 0x4e9a8c, slateLight: 0x44586f, caramel: 0xd99a62, caramelDark: 0xa76a3f,
+  sky: 0xd8edf4,
+};
 const PAL = {
-  wood: 0x9a6a3f, woodDark: 0x6d4a2b, metal: 0x9aa3ad, dark: 0x2c2c34, gray: 0x7d8894,
-  paper: 0xf5f1e3, white: 0xf2f2ee, screenOff: 0x101826, screenOn: 0x27435e,
-  coffee: 0x6b4226, red: 0xd63c2e, green: 0x3ddc84, tan: 0xd9a86c, brown: 0x7a4a22,
-  yellow: 0xffd93b, pink: 0xe8798a, blue: 0x4f8fd9, purple: 0x8a6fc8, gold: 0xe6b93b,
+  wood: 0xd99a62, woodDark: 0xa76a3f, metal: 0xb9c4cf, dark: 0x2e4057, gray: 0x94a6b5,
+  paper: 0xf7f3e8, white: 0xf7f7f2, screenOff: 0x0d1b1e, screenOn: 0x1e9e96,
+  coffee: 0x5d3a1a, red: 0xff3b30, green: 0x3ddc84, tan: 0xf0c088, brown: 0x8a5a33,
+  yellow: 0xffcc00, pink: 0xff9aa8, blue: 0x4f8fd9, purple: 0x8a6fc8, gold: 0xffcc00,
+  mint: 0x70c1b3, coral: 0xff6b6b, cream: 0xf7f7f2, slate: 0x2e4057,
 };
 function topLabel(parent, text, w, h, o = {}, y = 0, lift = 0.012) {
   const t = labelTex(text, o);
@@ -1320,234 +1400,297 @@ const PROP_DEFS = {
     label: 'Coffee Mug', mass: 0.5, traits: ['grabbable', 'throwable', 'liquid_container', 'food', 'breakable'],
     size: [0.24, 0.2, 0.24], breakAt: 9, col: () => RAPIER.ColliderDesc.cylinder(0.09, 0.11),
     build(g) {
-      cy(g, 0.11, 0.1, 0.18, PAL.white, 0, 0, 0);
-      cy(g, 0.09, 0.09, 0.015, PAL.coffee, 0, 0.085, 0, { basic: true });
-      bx(g, 0.05, 0.09, 0.03, PAL.white, 0.13, 0, 0);
+      cy(g, 0.13, 0.12, 0.14, PAL.cream, 0, -0.018, 0);                      // squat body
+      cy(g, 0.133, 0.133, 0.032, PAL.coral, 0, -0.062, 0);                   // accent band
+      tor(g, 0.118, 0.024, PAL.cream, 0, 0.052, 0, { rx: Math.PI / 2 });     // rolled rim
+      cy(g, 0.1, 0.1, 0.012, PAL.coffee, 0, 0.042, 0, { basic: true });
+      tor(g, 0.068, 0.03, PAL.coral, 0.148, -0.01, 0);                       // oversized ring handle
     }
   },
   stapler: {
     label: 'Stapler', mass: 0.45, traits: ['grabbable', 'throwable'], size: [0.28, 0.11, 0.09],
     build(g) {
-      bx(g, 0.28, 0.05, 0.08, PAL.red, 0, -0.02, 0);
-      bx(g, 0.28, 0.045, 0.07, 0xb52f24, 0, 0.03, -0.005, { rx: -0.12 });
-      bx(g, 0.02, 0.02, 0.06, PAL.metal, 0.1, 0.01, 0);
+      bx(g, 0.3, 0.07, 0.1, PAL.red, 0, -0.028, 0);
+      bx(g, 0.3, 0.06, 0.09, PAL.coral, 0, 0.026, -0.004, { rx: -0.1 });
+      tor(g, 0.028, 0.014, PAL.metal, 0.13, 0.002, 0, { rx: Math.PI / 2, metal: true });
+      bx(g, 0.03, 0.016, 0.06, PAL.metal, -0.125, 0.005, 0, { metal: true });
     }
   },
   laptop: {
     label: 'Laptop', mass: 1.7, traits: ['grabbable', 'throwable', 'electronic', 'breakable'], size: [0.44, 0.32, 0.35],
     breakAt: 8, meta: { electronic: true },
     build(g) {
-      bx(g, 0.44, 0.03, 0.3, PAL.gray, 0, -0.13, 0.02);
-      const lid = bx(g, 0.44, 0.3, 0.02, PAL.gray, 0, 0.02, -0.14, { rx: -0.28 });
-      const face = bx(g, 0.38, 0.24, 0.005, PAL.screenOn, 0, 0.03, -0.126, { rx: -0.28, basic: true, mat: { color: PAL.screenOn } });
+      bx(g, 0.46, 0.06, 0.32, PAL.slateLight, 0, -0.128, 0.02);              // chunky base
+      bx(g, 0.4, 0.012, 0.22, 0x2a3440, 0, -0.094, 0.04);                    // key deck
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++)
+        bx(g, 0.052, 0.016, 0.042, PAL.cream, -0.14 + c * 0.07, -0.084, -0.035 + r * 0.062);
+      const lid = bx(g, 0.44, 0.32, 0.05, PAL.slateLight, 0, 0.02, -0.14, { rx: -0.28 }); // fat lid
+      const face = bx(g, 0.36, 0.24, 0.014, PAL.screenOn, 0, 0.03, -0.117, { rx: -0.28, basic: true });
       g.userData.screen = face;
-      bx(g, 0.3, 0.005, 0.14, 0x3a3f47, 0, -0.11, 0.05);
+      bx(g, 0.06, 0.016, 0.016, PAL.coral, 0.19, -0.09, 0.16);               // trackpad dot
     }
   },
   keyboard: {
     label: 'Keyboard', mass: 0.55, traits: ['grabbable', 'throwable', 'electronic', 'breakable'], size: [0.44, 0.07, 0.18],
     breakAt: 9, meta: { electronic: true },
     build(g) {
-      bx(g, 0.42, 0.045, 0.16, 0x3a3f47, 0, -0.01, 0);
-      bx(g, 0.38, 0.012, 0.12, 0x565c66, 0, 0.022, 0);
-      topLabel(g, '⌨', 0.1, 0.1, { bg: 'none', fg: '#9aa3ad', fs: 60 }, 0.03);
+      bx(g, 0.44, 0.075, 0.18, PAL.coral, 0, -0.014, 0);                     // chunky shell
+      bx(g, 0.4, 0.018, 0.14, 0x2a3440, 0, 0.014, 0);
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 7; c++)
+        bx(g, 0.042, 0.016, 0.038, PAL.cream, -0.15 + c * 0.05, 0.03, -0.028 + r * 0.06);
+      bx(g, 0.13, 0.016, 0.038, PAL.cream, 0.02, 0.03, 0.052);               // spacebar
     }
   },
   monitor: {
     label: 'Monitor', mass: 2.4, traits: ['grabbable', 'throwable', 'electronic', 'breakable'], size: [0.58, 0.55, 0.24],
     breakAt: 8, meta: { electronic: true, hasScreen: true },
     build(g) {
-      bx(g, 0.2, 0.05, 0.18, PAL.dark, 0, -0.23, 0);
-      bx(g, 0.05, 0.16, 0.05, PAL.dark, 0, -0.13, 0);
-      bx(g, 0.56, 0.36, 0.045, PAL.dark, 0, 0.1, 0);
-      const face = bx(g, 0.5, 0.3, 0.01, PAL.screenOn, 0, 0.1, 0.026, { basic: true });
+      bx(g, 0.26, 0.08, 0.22, PAL.slate, 0, -0.235, 0);                      // fat foot
+      bx(g, 0.09, 0.18, 0.09, PAL.slate, 0, -0.14, 0);                       // neck
+      bx(g, 0.56, 0.4, 0.075, PAL.cream, 0, 0.1, 0);                         // chunky shell
+      const face = bx(g, 0.46, 0.29, 0.018, PAL.screenOn, 0, 0.1, 0.036, { basic: true });
       g.userData.screen = face;
-      topLabel(g, 'WORK OS 9', 0.34, 0.1, { bg: '#101826', fg: '#7fd4ff', fs: 34 }, 0.1, 0.032);
+      tor(g, 0.26, 0.016, PAL.coral, 0, 0.1, 0.045);                         // bezel accent ring
+      topLabel(g, 'WORK OS 9', 0.34, 0.1, { bg: '#0d2b29', fg: '#7ff5e8', fs: 34 }, 0.1, 0.047);
     }
   },
   contract: {
     label: 'VIP Contract', mass: 0.12, traits: ['grabbable', 'document', 'stampable'], size: [0.34, 0.02, 0.46], fric: 0.9,
     meta: { doc: true, important: true },
     build(g, e, opts) {
-      bx(g, 0.32, 0.012, 0.44, PAL.paper, 0, 0, 0);
-      g.userData.label = topLabel(g, opts && opts.title || 'VIP CONTRACT\n★ TOP SECRET ★', 0.3, 0.2, { fs: 30, fg: '#8e1712' }, 0.008);
+      bx(g, 0.32, 0.014, 0.44, PAL.paper, 0, 0, 0);                          // rounded corners
+      bx(g, 0.3, 0.006, 0.42, 0xffffff, 0, 0.008, 0);
+      g.userData.label = topLabel(g, opts && opts.title || 'VIP CONTRACT\n★ TOP SECRET ★', 0.3, 0.2, { fs: 30, fg: '#8e1712' }, 0.012);
     }
   },
   paper: {
     label: 'Paper', mass: 0.09, traits: ['grabbable', 'document', 'trashable'], size: [0.32, 0.02, 0.44], fric: 0.9,
     meta: { doc: true },
     build(g, e, opts) {
-      bx(g, 0.3, 0.01, 0.42, PAL.paper, 0, 0, 0);
-      g.userData.label = topLabel(g, (opts && opts.title) || 'TAX FORM Q3', 0.26, 0.08, { fs: 40, fg: '#3a3f47' }, 0.006);
+      bx(g, 0.3, 0.012, 0.42, PAL.paper, 0, 0, 0);
+      bx(g, 0.28, 0.006, 0.4, 0xffffff, 0, 0.007, 0);
+      g.userData.label = topLabel(g, (opts && opts.title) || 'TAX FORM Q3', 0.26, 0.08, { fs: 40, fg: '#3a3f47' }, 0.011);
     }
   },
   folder: {
     label: 'Folder', mass: 0.25, traits: ['grabbable', 'document'], size: [0.36, 0.05, 0.28],
-    build(g) { bx(g, 0.34, 0.035, 0.26, PAL.blue, 0, 0, 0); bx(g, 0.3, 0.012, 0.22, 0xe8e4d8, 0, 0.022, 0); }
+    build(g) {
+      bx(g, 0.36, 0.05, 0.28, PAL.coral, 0, 0, 0);
+      bx(g, 0.3, 0.014, 0.22, PAL.paper, 0, 0.024, 0);
+      bx(g, 0.1, 0.054, 0.032, PAL.gold, 0.12, 0, 0.12);                     // accent tab
+    }
   },
   phoneBase: {
     label: 'Telephone', mass: 1.1, traits: ['grabbable', 'throwable', 'electronic', 'breakable'], size: [0.26, 0.14, 0.2],
     breakAt: 9, meta: { electronic: true, phone: true },
     build(g) {
-      bx(g, 0.22, 0.08, 0.16, PAL.dark, 0, -0.02, 0);
-      topLabel(g, '☎', 0.12, 0.1, { bg: '#1d5c38', fg: '#c9ffe8', fs: 44 }, 0.02);
-      bx(g, 0.05, 0.012, 0.05, PAL.red, 0.07, 0.025, 0.05, { basic: true });
+      bx(g, 0.26, 0.11, 0.2, PAL.red, 0, -0.035, 0);                         // chunky body
+      topLabel(g, '☎', 0.12, 0.1, { bg: '#1d5c38', fg: '#c9ffe8', fs: 44 }, 0.018);
+      bx(g, 0.05, 0.014, 0.05, PAL.gold, 0.07, 0.026, 0.05, { basic: true });
       g.userData.led = g.children[g.children.length - 1];
+      for (let i = 0; i < 3; i++)                                            // coiled cord
+        tor(g, 0.03, 0.011, PAL.coral, -0.05 - i * 0.048, -0.07, -0.1 - i * 0.022, { rx: Math.PI / 2.3 });
     }
   },
   handset: {
     label: 'Handset', mass: 0.35, traits: ['grabbable', 'throwable'], size: [0.24, 0.08, 0.08],
     build(g) {
-      bx(g, 0.16, 0.045, 0.05, PAL.dark, 0, 0, 0);
-      cy(g, 0.035, 0.035, 0.05, PAL.dark, -0.09, 0, 0, { rz: Math.PI / 2 });
-      cy(g, 0.035, 0.035, 0.05, PAL.dark, 0.09, 0, 0, { rz: Math.PI / 2 });
+      bx(g, 0.18, 0.05, 0.062, PAL.red, 0, 0, 0);
+      cy(g, 0.048, 0.048, 0.06, PAL.red, -0.09, 0.002, 0, { rz: Math.PI / 2 });
+      cy(g, 0.048, 0.048, 0.06, PAL.red, 0.09, 0.002, 0, { rz: Math.PI / 2 });
+      bx(g, 0.14, 0.012, 0.03, PAL.cream, 0, 0.032, 0);
     }
   },
   penCup: {
     label: 'Pen Cup', mass: 0.5, traits: ['grabbable', 'throwable', 'breakable'], size: [0.16, 0.26, 0.16],
     breakAt: 8, col: () => RAPIER.ColliderDesc.cylinder(0.12, 0.07),
     build(g) {
-      cy(g, 0.07, 0.06, 0.16, PAL.blue, 0, -0.04, 0);
-      cy(g, 0.012, 0.012, 0.2, PAL.yellow, 0.02, 0.12, 0, { rz: 0.2 });
-      cy(g, 0.012, 0.012, 0.18, PAL.red, -0.02, 0.11, 0.01, { rz: -0.15 });
-      cy(g, 0.012, 0.012, 0.19, 0x333844, 0, 0.11, -0.02, { rz: 0.1 });
+      cy(g, 0.082, 0.07, 0.18, PAL.mint, 0, -0.03, 0);
+      tor(g, 0.082, 0.016, PAL.mint, 0, 0.058, 0, { rx: Math.PI / 2 });      // rolled rim
+      cy(g, 0.014, 0.014, 0.2, PAL.gold, 0.02, 0.12, 0, { rz: 0.2 });
+      cy(g, 0.014, 0.014, 0.18, PAL.coral, -0.02, 0.11, 0.01, { rz: -0.15 });
+      cy(g, 0.014, 0.014, 0.19, PAL.slate, 0, 0.11, -0.02, { rz: 0.1 });
     }
   },
   plantPot: {
     label: 'Plant Pot', mass: 2.2, traits: ['grabbable', 'throwable', 'breakable'], size: [0.32, 0.5, 0.32], breakAt: 10,
     col: () => RAPIER.ColliderDesc.cylinder(0.24, 0.15),
     build(g) {
-      cy(g, 0.14, 0.1, 0.2, 0xb0623a, 0, -0.15, 0);
-      cy(g, 0.15, 0.15, 0.02, 0x5c3a22, 0, -0.04, 0);
-      sp(g, 0.16, 0x3f9e4d, 0, 0.08, 0, { seg: 8 });
-      sp(g, 0.12, 0x4db85c, 0.08, 0.18, 0.04, { seg: 8 });
-      sp(g, 0.1, 0x3f9e4d, -0.07, 0.2, -0.03, { seg: 8 });
+      cy(g, 0.17, 0.12, 0.2, PAL.coral, 0, -0.16, 0);
+      tor(g, 0.17, 0.018, PAL.coral, 0, -0.055, 0, { rx: Math.PI / 2 });     // rim fillet
+      cy(g, 0.155, 0.155, 0.02, 0x6b4226, 0, -0.05, 0);                      // soil
+      sp(g, 0.17, 0x3f9e4d, 0, 0.1, 0, { seg: 9 });
+      sp(g, 0.13, 0x4db85c, 0.09, 0.2, 0.04, { seg: 9 });
+      sp(g, 0.11, 0x3f9e4d, -0.08, 0.22, -0.03, { seg: 9 });
     }
   },
   calculator: {
     label: 'Calculator', mass: 0.3, traits: ['grabbable', 'throwable'], size: [0.18, 0.05, 0.26],
     build(g) {
-      bx(g, 0.16, 0.035, 0.24, 0x2f333b, 0, 0, 0);
-      topLabel(g, '8.8.8.8', 0.12, 0.05, { bg: '#9fb98a', fg: '#22301c', fs: 36 }, 0.02, 0.019);
+      bx(g, 0.18, 0.05, 0.26, PAL.slateLight, 0, 0, 0);
+      topLabel(g, '8.8.8.8', 0.12, 0.05, { bg: '#c9e8b8', fg: '#22301c', fs: 36 }, 0.018, 0.019);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+        bx(g, 0.03, 0.012, 0.03, PAL.gold, -0.045 + c * 0.045, 0.016, 0.055 + r * 0.045);
     }
   },
   mouse: {
     label: 'Mouse', mass: 0.12, traits: ['grabbable', 'throwable'], size: [0.1, 0.07, 0.14],
     col: () => RAPIER.ColliderDesc.ball(0.06),
-    build(g) { const m = sp(g, 0.06, 0x454a52, 0, -0.01, 0, { seg: 8 }); m.scale.set(1, 0.7, 1.35); }
+    build(g) {
+      const m = sp(g, 0.062, PAL.cream, 0, -0.012, 0, { seg: 10 }); m.scale.set(1, 0.75, 1.4);
+      sp(g, 0.008, PAL.slate, 0, 0.034, -0.028);
+    }
   },
   organizer: {
     label: 'Desk Organizer', mass: 1.0, traits: ['grabbable', 'throwable'], size: [0.28, 0.26, 0.2],
     build(g) {
-      bx(g, 0.26, 0.2, 0.18, PAL.woodDark, 0, 0, 0);
-      bx(g, 0.24, 0.02, 0.05, PAL.wood, 0, 0.06, -0.04);
-      bx(g, 0.06, 0.02, 0.16, PAL.wood, -0.08, 0.1, 0.02);
-      bx(g, 0.06, 0.02, 0.16, PAL.wood, 0.08, 0.1, 0.02);
+      bx(g, 0.28, 0.22, 0.2, PAL.mint, 0, 0, 0);
+      bx(g, 0.24, 0.03, 0.05, PAL.cream, 0, 0.06, -0.045);
+      bx(g, 0.06, 0.03, 0.16, PAL.cream, -0.08, 0.1, 0.02);
+      bx(g, 0.06, 0.03, 0.16, PAL.cream, 0.08, 0.1, 0.02);
+      cy(g, 0.022, 0.022, 0.12, PAL.gold, 0, 0.08, 0.06);
     }
   },
   /* ------ fast food ------ */
   bun: {
     label: 'Burger Bun', mass: 0.2, traits: ['grabbable', 'throwable', 'food'], size: [0.28, 0.18, 0.28],
     col: () => RAPIER.ColliderDesc.ball(0.13),
-    build(g) { const b = sp(g, 0.13, PAL.tan, 0, 0, 0, { seg: 10 }); b.scale.set(1, 0.65, 1); sp(g, 0.02, 0xf5ead0, 0.05, 0.075, 0.03); sp(g, 0.02, 0xf5ead0, -0.04, 0.078, -0.02); }
+    build(g) {
+      const b = sp(g, 0.135, PAL.tan, 0, 0, 0, { seg: 12 }); b.scale.set(1, 0.62, 1);
+      const crown = sp(g, 0.115, 0xe8b06a, 0, 0.05, 0, { seg: 12 }); crown.scale.set(1, 0.5, 1);
+      sp(g, 0.02, 0xf7ead0, 0.05, 0.082, 0.03);
+      sp(g, 0.02, 0xf7ead0, -0.04, 0.085, -0.02);
+    }
   },
   patty: {
     label: 'Patty', mass: 0.28, traits: ['grabbable', 'throwable', 'food'], size: [0.34, 0.08, 0.34],
     col: () => RAPIER.ColliderDesc.cylinder(0.035, 0.16),
-    build(g) { cy(g, 0.16, 0.16, 0.06, 0x6d4227, 0, 0, 0); cy(g, 0.17, 0.17, 0.012, 0x59351f, 0, 0.03, 0); }
+    build(g) {
+      cy(g, 0.165, 0.165, 0.06, 0x6d4227, 0, 0, 0);
+      tor(g, 0.165, 0.02, 0x59351f, 0, 0.022, 0, { rx: Math.PI / 2 });       // grilled edge fillet
+      cy(g, 0.13, 0.13, 0.014, 0x59351f, 0, 0.036, 0);
+    }
   },
   fries: {
     label: 'Fries', mass: 0.16, traits: ['grabbable', 'throwable', 'food'], size: [0.16, 0.2, 0.13],
     build(g) {
-      bx(g, 0.14, 0.14, 0.1, PAL.red, 0, -0.03, 0);
+      bx(g, 0.15, 0.15, 0.11, PAL.red, 0, -0.028, 0);
+      bx(g, 0.12, 0.028, 0.085, PAL.gold, 0, 0.028, 0);
       topLabel(g, 'FRIES', 0.12, 0.06, { fs: 30, fg: '#ffd93b', bg: '#d63c2e' }, 0.04);
-      for (let i = 0; i < 4; i++) bx(g, 0.02, 0.1, 0.02, 0xf5d76e, -0.04 + i * 0.027, 0.1, U.rand(-0.02, 0.02), { rz: U.rand(-0.15, 0.15) });
+      for (let i = 0; i < 4; i++)
+        bx(g, 0.024, 0.1, 0.022, 0xf5d76e, -0.045 + i * 0.03, 0.09, U.rand(-0.02, 0.02), { rz: U.rand(-0.15, 0.15) });
     }
   },
   ketchup: {
     label: 'Ketchup', mass: 0.5, traits: ['grabbable', 'throwable', 'food'], size: [0.14, 0.28, 0.14],
     col: () => RAPIER.ColliderDesc.cylinder(0.13, 0.065),
-    build(g) { cy(g, 0.065, 0.065, 0.24, PAL.red, 0, 0, 0); cy(g, 0.03, 0.03, 0.04, 0xffffff, 0, 0.14, 0); topLabel(g, 'K', 0.09, 0.09, { bg: 'none', fg: '#ffffff', fs: 70 }, 0.02, 0.068); }
+    build(g) {
+      cy(g, 0.07, 0.07, 0.2, PAL.red, 0, -0.03, 0);
+      tor(g, 0.07, 0.016, PAL.red, 0, 0.07, 0, { rx: Math.PI / 2 });
+      cy(g, 0.032, 0.032, 0.05, PAL.cream, 0, 0.1, 0);
+      cy(g, 0.073, 0.073, 0.05, PAL.cream, 0, -0.1, 0);                      // base accent band
+      topLabel(g, 'K', 0.09, 0.09, { bg: 'none', fg: '#ffffff', fs: 70 }, 0.02, 0.068);
+    }
   },
   mustard: {
     label: 'Mustard', mass: 0.5, traits: ['grabbable', 'throwable', 'food'], size: [0.14, 0.28, 0.14],
     col: () => RAPIER.ColliderDesc.cylinder(0.13, 0.065),
-    build(g) { cy(g, 0.065, 0.065, 0.24, 0xe8b420, 0, 0, 0); cy(g, 0.03, 0.03, 0.04, 0xffffff, 0, 0.14, 0); topLabel(g, 'M', 0.09, 0.09, { bg: 'none', fg: '#6b4226', fs: 70 }, 0.02, 0.068); }
+    build(g) {
+      cy(g, 0.07, 0.07, 0.2, PAL.gold, 0, -0.03, 0);
+      tor(g, 0.07, 0.016, PAL.gold, 0, 0.07, 0, { rx: Math.PI / 2 });
+      cy(g, 0.032, 0.032, 0.05, PAL.cream, 0, 0.1, 0);
+      cy(g, 0.073, 0.073, 0.05, PAL.cream, 0, -0.1, 0);
+      topLabel(g, 'M', 0.09, 0.09, { bg: 'none', fg: '#6b4226', fs: 70 }, 0.02, 0.068);
+    }
   },
   tray: {
     label: 'Serving Tray', mass: 0.8, traits: ['grabbable', 'throwable', 'tray'], size: [0.54, 0.12, 0.4],
     build(g) {
-      bx(g, 0.52, 0.03, 0.38, PAL.gray, 0, -0.03, 0);
-      bx(g, 0.52, 0.05, 0.03, PAL.gray, 0, 0, 0.185);
-      bx(g, 0.52, 0.05, 0.03, PAL.gray, 0, 0, -0.185);
-      bx(g, 0.03, 0.05, 0.38, PAL.gray, 0.245, 0, 0);
-      bx(g, 0.03, 0.05, 0.38, PAL.gray, -0.245, 0, 0);
-      topLabel(g, 'SERVE', 0.16, 0.08, { fs: 34, fg: '#e6332a', bg: '#f2f2ee' }, -0.012);
+      bx(g, 0.52, 0.04, 0.38, PAL.mint, 0, -0.035, 0);
+      bx(g, 0.52, 0.055, 0.05, PAL.mint, 0, -0.002, 0.185);
+      bx(g, 0.52, 0.055, 0.05, PAL.mint, 0, -0.002, -0.185);
+      bx(g, 0.05, 0.055, 0.38, PAL.mint, 0.243, -0.002, 0);
+      bx(g, 0.05, 0.055, 0.38, PAL.mint, -0.243, -0.002, 0);
+      topLabel(g, 'SERVE', 0.16, 0.08, { fs: 34, fg: '#ffffff', bg: '#ff3b30' }, -0.012);
     }
   },
   cup: {
     label: 'Cup', mass: 0.22, traits: ['grabbable', 'throwable', 'liquid_container', 'food'], size: [0.18, 0.24, 0.18],
     col: () => RAPIER.ColliderDesc.cylinder(0.11, 0.08),
     build(g) {
-      cy(g, 0.08, 0.06, 0.2, PAL.white, 0, 0, 0);
-      cy(g, 0.07, 0.07, 0.012, 0xc8622f, 0, 0.09, 0, { basic: true });
-      cy(g, 0.012, 0.012, 0.16, PAL.red, 0.02, 0.16, 0, { rz: 0.25 });
+      cy(g, 0.085, 0.065, 0.19, PAL.cream, 0, -0.005, 0);
+      tor(g, 0.085, 0.016, PAL.coral, 0, 0.09, 0, { rx: Math.PI / 2 });      // rolled rim
+      cy(g, 0.068, 0.068, 0.012, 0xc8622f, 0, 0.07, 0, { basic: true });
+      cy(g, 0.013, 0.013, 0.15, PAL.red, 0.02, 0.13, 0, { rz: 0.25 });       // straw
     }
   },
   extinguisher: {
     label: 'Extinguisher', mass: 3.6, traits: ['grabbable', 'throwable', 'hazard'], size: [0.26, 0.56, 0.26], damp: 0.2,
     col: () => RAPIER.ColliderDesc.cylinder(0.26, 0.12),
     build(g) {
-      cy(g, 0.12, 0.12, 0.44, PAL.red, 0, -0.04, 0);
-      cy(g, 0.05, 0.05, 0.1, PAL.metal, 0, 0.24, 0);
-      bx(g, 0.12, 0.03, 0.05, 0x22252b, 0.04, 0.31, 0);
-      bx(g, 0.03, 0.16, 0.03, 0x22252b, 0.1, 0.2, 0, { rz: 0.4 });
-      topLabel(g, 'FIRE', 0.1, 0.1, { fs: 30, fg: '#fff', bg: '#d63c2e' }, -0.02, 0.125);
+      cy(g, 0.125, 0.125, 0.4, PAL.red, 0, -0.05, 0);
+      tor(g, 0.125, 0.02, PAL.cream, 0, -0.225, 0, { rx: Math.PI / 2 });     // base band
+      cy(g, 0.055, 0.055, 0.11, PAL.metal, 0, 0.22, 0, { metal: true });
+      bx(g, 0.14, 0.035, 0.06, 0x22252b, 0.04, 0.3, 0);
+      bx(g, 0.035, 0.17, 0.035, 0x22252b, 0.1, 0.2, 0, { rz: 0.4 });
+      tor(g, 0.028, 0.011, PAL.metal, 0.135, 0.1, 0, { metal: true });
+      topLabel(g, 'FIRE', 0.1, 0.1, { fs: 30, fg: '#fff', bg: '#ff3b30' }, -0.02, 0.128);
     }
   },
   foodBox: {
-    label: 'Food Box', mass: 0.2, traits: ['grabbable', 'throwable', 'food', 'trashable'], size: [0.32, 0.24, 0.24],
+    label: 'Food Box', mass: 0.2, traits: ['grabbable', 'throwable', 'food', 'trashable'], size: [0.32, 0.24, 0.22],
     build(g) {
-      bx(g, 0.3, 0.2, 0.22, 0xe8b464, 0, 0, 0);
-      topLabel(g, 'MEAL\nDEAL', 0.2, 0.14, { fs: 30, fg: '#d63c2e' }, 0.1);
+      bx(g, 0.3, 0.2, 0.22, 0xf0b95c, 0, 0, 0);
+      bx(g, 0.31, 0.05, 0.23, PAL.red, 0, 0.055, 0);                         // accent band
+      topLabel(g, 'MEAL\nDEAL', 0.2, 0.14, { fs: 30, fg: '#ffffff', bg: '#ff3b30' }, 0.1);
     }
   },
   spatula: {
     label: 'Spatula', mass: 0.3, traits: ['grabbable', 'throwable'], size: [0.36, 0.04, 0.12],
-    build(g) { bx(g, 0.2, 0.015, 0.1, PAL.metal, 0.08, 0, 0); bx(g, 0.16, 0.025, 0.035, 0x22252b, -0.1, 0, 0); }
+    build(g) {
+      bx(g, 0.21, 0.018, 0.1, PAL.metal, 0.08, 0, 0, { metal: true });
+      bx(g, 0.18, 0.03, 0.04, PAL.slate, -0.1, 0, 0);
+      tor(g, 0.02, 0.009, PAL.slate, -0.185, 0, 0);                          // hang-hole ring
+    }
   },
   paperBag: {
     label: 'Paper Bag', mass: 0.16, traits: ['grabbable', 'throwable', 'trashable'], size: [0.26, 0.34, 0.18],
     build(g) {
-      bx(g, 0.24, 0.3, 0.16, 0xb08b57, 0, 0, 0);
-      bx(g, 0.2, 0.02, 0.02, 0x8a6a3f, 0, 0.16, 0.08); bx(g, 0.2, 0.02, 0.02, 0x8a6a3f, 0, 0.16, -0.08);
+      bx(g, 0.24, 0.3, 0.16, 0xd9a35c, 0, 0, 0);
+      bx(g, 0.25, 0.045, 0.17, 0xc08b47, 0, 0.13, 0);                        // folded lip
+      bx(g, 0.2, 0.018, 0.022, 0x8a6a3f, 0, 0.16, 0.08);
+      bx(g, 0.2, 0.018, 0.022, 0x8a6a3f, 0, 0.16, -0.08);
       topLabel(g, '🍔', 0.1, 0.1, { bg: 'none', fs: 60 }, 0.1);
     }
   },
   tongs: {
     label: 'Tongs', mass: 0.2, traits: ['grabbable', 'throwable'], size: [0.32, 0.05, 0.08],
     build(g) {
-      bx(g, 0.3, 0.015, 0.03, PAL.metal, 0, 0.01, 0.015, { rz: 0.06 });
-      bx(g, 0.3, 0.015, 0.03, PAL.metal, 0, -0.01, -0.015, { rz: -0.06 });
+      bx(g, 0.3, 0.018, 0.032, PAL.metal, 0, 0.012, 0.016, { rz: 0.06, metal: true });
+      bx(g, 0.3, 0.018, 0.032, PAL.metal, 0, -0.012, -0.016, { rz: -0.06, metal: true });
+      tor(g, 0.02, 0.009, PAL.metal, -0.14, 0, 0, { metal: true });
     }
   },
   boot: {
     label: 'Dirty Boot', mass: 1.5, traits: ['grabbable', 'throwable'], size: [0.2, 0.26, 0.38],
     meta: { boot: true },
     build(g) {
-      bx(g, 0.16, 0.2, 0.14, 0x5a3d28, 0, 0.02, -0.1);
-      bx(g, 0.16, 0.09, 0.26, 0x5a3d28, 0, -0.06, 0.05);
-      bx(g, 0.17, 0.035, 0.27, 0x2c2018, 0, -0.115, 0.05);
-      for (let i = 0; i < 3; i++) bx(g, 0.02, 0.02, 0.02, 0x3d2c1a, U.rand(-0.05, 0.05), 0.13, U.rand(-0.05, 0.05));
+      bx(g, 0.18, 0.22, 0.16, 0x6b4a30, 0, 0.02, -0.1);                      // chunky shaft
+      bx(g, 0.18, 0.11, 0.28, 0x6b4a30, 0, -0.07, 0.05);                     // foot
+      tor(g, 0.095, 0.022, 0x8a6a3f, 0, 0.1, -0.1, { rx: Math.PI / 2 });     // cuff roll
+      bx(g, 0.19, 0.045, 0.29, 0x3d2c1a, 0, -0.125, 0.05);                   // toy sole
+      for (let i = 0; i < 3; i++)
+        bx(g, 0.022, 0.022, 0.022, 0x4d3a26, U.rand(-0.05, 0.05), 0.14, U.rand(-0.05, 0.05));
     }
   },
   bell: {
     label: 'Service Bell', mass: 0.25, traits: ['grabbable', 'throwable'], size: [0.18, 0.14, 0.18],
     meta: { bell: true },
     build(g) {
-      cy(g, 0.09, 0.1, 0.03, PAL.metal, 0, -0.05, 0);
-      const d = sp(g, 0.08, 0xd9b23b, 0, -0.01, 0, { seg: 12 }); d.scale.y = 0.6;
-      cy(g, 0.02, 0.02, 0.03, 0x8a6a3f, 0, 0.06, 0);
+      cy(g, 0.095, 0.105, 0.035, PAL.metal, 0, -0.052, 0, { metal: true });
+      const d = sp(g, 0.085, PAL.gold, 0, -0.008, 0, { seg: 14 }); d.scale.y = 0.62;
+      tor(g, 0.085, 0.012, 0xd9b23b, 0, 0.002, 0, { rx: Math.PI / 2 });
+      sp(g, 0.022, PAL.metal, 0, 0.052, 0);
     }
   },
   /* ------ customer service & sales ------ */
@@ -1557,9 +1700,9 @@ const PROP_DEFS = {
     build(g, e, opts) {
       const kind = (opts && opts.kind) || 'reject';
       e.meta.stampKind = kind;
-      bx(g, 0.13, 0.05, 0.13, 0x22252b, 0, -0.07, 0);
-      bx(g, 0.05, 0.12, 0.05, 0x3a3f47, 0, 0, 0);
-      cy(g, 0.07, 0.075, 0.05, kind === '99' ? PAL.gold : PAL.red, 0, 0.09, 0);
+      bx(g, 0.14, 0.055, 0.14, 0x22252b, 0, -0.068, 0);
+      bx(g, 0.06, 0.13, 0.06, 0x3a3f47, 0, 0.005, 0);
+      cy(g, 0.078, 0.082, 0.055, kind === '99' ? PAL.gold : PAL.red, 0, 0.088, 0);
       topLabel(g, kind === '99' ? '99%\nOFF' : 'REJECT', 0.1, 0.1, { fs: 26, fg: '#fff', bg: kind === '99' ? '#b8860b' : '#d63c2e' }, 0.115);
     }
   },
@@ -1567,94 +1710,112 @@ const PROP_DEFS = {
     label: 'Water Cup', mass: 0.2, traits: ['grabbable', 'throwable', 'liquid_container'], size: [0.16, 0.22, 0.16],
     col: () => RAPIER.ColliderDesc.cylinder(0.1, 0.07),
     build(g) {
-      cy(g, 0.07, 0.05, 0.18, 0xdff2ff, 0, 0, 0, { basic: true, mat: { transparent: true, opacity: 0.85 } });
-      cy(g, 0.058, 0.058, 0.012, 0x7fd4ff, 0, 0.06, 0, { basic: true });
+      cy(g, 0.075, 0.055, 0.17, 0xdff2ff, 0, 0, 0, { basic: true, mat: { transparent: true, opacity: 0.85 } });
+      tor(g, 0.075, 0.012, 0xbfe4f5, 0, 0.085, 0, { rx: Math.PI / 2, basic: true, mat: { transparent: true, opacity: 0.9 } });
+      cy(g, 0.058, 0.058, 0.012, 0x7fd4ff, 0, 0.055, 0, { basic: true });
     }
   },
   headset: {
     label: 'Headset', mass: 0.3, traits: ['grabbable', 'throwable', 'electronic'], size: [0.28, 0.14, 0.22],
     build(g) {
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.016, 6, 14, Math.PI), M(PAL.dark));
-      band.rotation.z = Math.PI; band.position.y = 0.05; band.castShadow = SHADOWS; g.add(band);
-      cy(g, 0.05, 0.05, 0.03, PAL.dark, -0.11, 0.02, 0, { rz: Math.PI / 2 });
-      cy(g, 0.05, 0.05, 0.03, PAL.dark, 0.11, 0.02, 0, { rz: Math.PI / 2 });
-      bx(g, 0.012, 0.1, 0.012, PAL.red, 0.1, -0.02, 0.05, { rz: 0.5 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.024, 8, 16, Math.PI), M(PAL.slate));
+      band.rotation.z = Math.PI; band.position.y = 0.06; band.castShadow = SHADOWS;
+      g.add(band);
+      cy(g, 0.058, 0.058, 0.045, PAL.slate, -0.115, 0.02, 0, { rz: Math.PI / 2 });
+      cy(g, 0.058, 0.058, 0.045, PAL.slate, 0.115, 0.02, 0, { rz: Math.PI / 2 });
+      cy(g, 0.045, 0.045, 0.012, PAL.coral, -0.115, 0.02, 0.028, { rz: Math.PI / 2 });
+      cy(g, 0.045, 0.045, 0.012, PAL.coral, 0.115, 0.02, 0.028, { rz: Math.PI / 2 });
+      bx(g, 0.014, 0.1, 0.014, PAL.red, 0.1, -0.03, 0.05, { rz: 0.5 });      // boom mic
     }
   },
   pen: {
     label: 'Pen', mass: 0.05, traits: ['grabbable', 'throwable'], size: [0.18, 0.04, 0.04],
     col: () => RAPIER.ColliderDesc.cylinder(0.08, 0.018),
-    build(g) { cy(g, 0.018, 0.018, 0.16, PAL.blue, 0, 0, 0, { rz: Math.PI / 2 }); cy(g, 0.018, 0.005, 0.03, 0x22252b, 0.095, 0, 0, { rz: Math.PI / 2 }); }
+    build(g) {
+      cy(g, 0.02, 0.02, 0.15, PAL.blue, 0, 0, 0, { rz: Math.PI / 2 });
+      cy(g, 0.02, 0.006, 0.035, 0x22252b, 0.092, 0, 0, { rz: Math.PI / 2 });
+      tor(g, 0.014, 0.006, PAL.gold, -0.04, 0, 0, { ry: Math.PI / 2 });      // clip band
+    }
   },
   champagne: {
     label: 'Champagne', mass: 1.2, traits: ['grabbable', 'throwable', 'breakable', 'liquid_container'], size: [0.16, 0.42, 0.16],
     breakAt: 8, col: () => RAPIER.ColliderDesc.cylinder(0.19, 0.06),
     meta: { champagne: true },
     build(g) {
-      cy(g, 0.06, 0.06, 0.28, 0x2f5d3a, 0, -0.05, 0);
-      cy(g, 0.025, 0.05, 0.14, 0x2f5d3a, 0, 0.16, 0);
-      cy(g, 0.026, 0.026, 0.05, PAL.gold, 0, 0.24, 0);
-      topLabel(g, '🍾', 0.1, 0.1, { bg: 'none', fs: 60 }, -0.05, 0.062);
+      cy(g, 0.062, 0.062, 0.26, 0x2f6b45, 0, -0.06, 0);
+      cy(g, 0.026, 0.052, 0.15, 0x2f6b45, 0, 0.145, 0);
+      tor(g, 0.032, 0.012, PAL.gold, 0, 0.21, 0, { rx: Math.PI / 2 });       // foil ring
+      cy(g, 0.028, 0.028, 0.05, PAL.gold, 0, 0.235, 0);
+      topLabel(g, '🍾', 0.1, 0.1, { bg: 'none', fs: 60 }, -0.05, 0.065);
     }
   },
   glass: {
     label: 'Wine Glass', mass: 0.16, traits: ['grabbable', 'throwable', 'breakable', 'liquid_container'], size: [0.14, 0.2, 0.14],
     breakAt: 6, col: () => RAPIER.ColliderDesc.cylinder(0.09, 0.05),
     build(g) {
-      cy(g, 0.05, 0.04, 0.1, 0xcfe8dd, 0, 0.03, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
-      cy(g, 0.012, 0.012, 0.08, 0xcfe8dd, 0, -0.05, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
-      cy(g, 0.045, 0.045, 0.012, 0xcfe8dd, 0, -0.09, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
+      cy(g, 0.05, 0.042, 0.1, 0xcfe8dd, 0, 0.028, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
+      tor(g, 0.05, 0.01, 0xcfe8dd, 0, 0.08, 0, { rx: Math.PI / 2, basic: true, mat: { transparent: true, opacity: 0.6 } });
+      cy(g, 0.012, 0.012, 0.07, 0xcfe8dd, 0, -0.045, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
+      cy(g, 0.048, 0.048, 0.014, 0xcfe8dd, 0, -0.085, 0, { basic: true, mat: { transparent: true, opacity: 0.6 } });
     }
   },
   posMachine: {
     label: 'POS Terminal', mass: 3.0, traits: ['grabbable', 'throwable', 'electronic', 'breakable'], size: [0.34, 0.32, 0.3],
     breakAt: 9, meta: { electronic: true, hasScreen: true, pos: true },
     build(g) {
-      bx(g, 0.3, 0.08, 0.26, PAL.dark, 0, -0.1, 0.02, { rx: -0.2 });
-      bx(g, 0.28, 0.2, 0.04, PAL.dark, 0, 0.05, -0.08, { rx: -0.25 });
-      const face = bx(g, 0.24, 0.16, 0.01, PAL.screenOn, 0, 0.07, -0.058, { rx: -0.25, basic: true });
+      bx(g, 0.32, 0.1, 0.28, PAL.slate, 0, -0.1, 0.02, { rx: -0.2 });        // chunky base
+      bx(g, 0.3, 0.22, 0.06, PAL.slate, 0, 0.05, -0.08, { rx: -0.25 });      // head
+      const face = bx(g, 0.25, 0.17, 0.012, PAL.screenOn, 0, 0.07, -0.052, { rx: -0.25, basic: true });
       g.userData.screen = face;
-      topLabel(g, 'POS $ READY', 0.2, 0.06, { bg: '#101826', fg: '#7fd4ff', fs: 26 }, -0.06, 0.036);
+      bx(g, 0.2, 0.014, 0.05, PAL.metal, 0.02, -0.045, 0.1, { metal: true, rx: -0.2 }); // card strip
+      topLabel(g, 'POS $ READY', 0.2, 0.06, { bg: '#0d2b29', fg: '#7ff5e8', fs: 26 }, -0.06, 0.036);
     }
   },
   giftBasket: {
     label: 'VIP Gift Basket', mass: 1.9, traits: ['grabbable', 'throwable'], size: [0.52, 0.28, 0.4],
     meta: { gift: true, important: true },
     build(g) {
-      bx(g, 0.46, 0.14, 0.34, 0xa5713d, 0, -0.05, 0);
-      bx(g, 0.46, 0.03, 0.05, 0x8a5c30, 0, 0.03, 0.15); bx(g, 0.46, 0.03, 0.05, 0x8a5c30, 0, 0.03, -0.15);
-      sp(g, 0.09, 0xd94f6b, -0.1, 0.06, 0.05, { seg: 8 });
-      sp(g, 0.09, 0xf2c94c, 0.08, 0.07, -0.04, { seg: 8 });
-      sp(g, 0.08, 0x6db85c, 0.02, 0.06, 0.1, { seg: 8 });
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 6, 12), M(PAL.red));
-      band.rotation.x = Math.PI / 2; band.position.set(0, 0.14, 0); g.add(band);
-      topLabel(g, 'VIP GIFT', 0.2, 0.08, { fs: 30, fg: '#fff', bg: '#8e1712' }, 0.03);
+      bx(g, 0.46, 0.16, 0.34, 0xc98a52, 0, -0.06, 0);
+      bx(g, 0.47, 0.05, 0.06, 0xa5713d, 0, 0.015, 0.155);
+      bx(g, 0.47, 0.05, 0.06, 0xa5713d, 0, 0.015, -0.155);
+      bx(g, 0.06, 0.05, 0.35, 0xa5713d, 0.21, 0.015, 0);
+      bx(g, 0.06, 0.05, 0.35, 0xa5713d, -0.21, 0.015, 0);
+      sp(g, 0.095, PAL.coral, -0.1, 0.05, 0.05, { seg: 10 });
+      sp(g, 0.095, PAL.gold, 0.08, 0.06, -0.04, { seg: 10 });
+      sp(g, 0.085, PAL.mint, 0.02, 0.05, 0.1, { seg: 10 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 16), M(PAL.red));
+      band.rotation.x = Math.PI / 2; band.position.set(0, 0.12, 0); band.castShadow = SHADOWS;
+      g.add(band);
+      topLabel(g, 'VIP GIFT', 0.2, 0.08, { fs: 30, fg: '#fff', bg: '#ff3b30' }, 0.03);
     }
   },
   brochure: {
     label: 'Luxury Brochure', mass: 0.08, traits: ['grabbable', 'document', 'trashable'], size: [0.3, 0.02, 0.4], fric: 0.9,
     meta: { doc: true },
     build(g) {
-      bx(g, 0.28, 0.01, 0.38, 0xf7f0da, 0, 0, 0);
-      topLabel(g, 'LUXURY\nLIVING', 0.24, 0.16, { fs: 30, fg: '#b8860b' }, 0.006);
+      bx(g, 0.28, 0.012, 0.38, 0xf7f0da, 0, 0, 0);
+      bx(g, 0.26, 0.006, 0.36, 0xfffbe8, 0, 0.007, 0);
+      g.userData.label = topLabel(g, 'LUXURY\nLIVING', 0.24, 0.16, { fs: 30, fg: '#b8860b' }, 0.011);
     }
   },
   model: {
-    label: 'Property Model', mass: 1.3, traits: ['grabbable', 'throwable'], size: [0.42, 0.36, 0.34],
+    label: 'Property Model', mass: 1.3, traits: ['grabbable', 'throwable'], size: [0.42, 0.36, 0.3],
     meta: { model: true },
     build(g) {
-      bx(g, 0.32, 0.16, 0.26, 0xe8e0cf, 0, -0.08, 0);
-      const roof = new THREE.Mesh(GCone(0.24, 0.18, 4), M(0xb04a3a));
-      roof.position.y = 0.09; roof.rotation.y = Math.PI / 4; roof.castShadow = SHADOWS; g.add(roof);
-      bx(g, 0.06, 0.09, 0.02, 0x4a3b2a, 0, -0.11, 0.135);
+      bx(g, 0.34, 0.17, 0.28, 0xf2ead8, 0, -0.09, 0);
+      const roof = new THREE.Mesh(GCone(0.25, 0.2, 4), M(PAL.coral));
+      roof.position.y = 0.1; roof.rotation.y = Math.PI / 4; roof.castShadow = SHADOWS;
+      g.add(roof);
+      bx(g, 0.07, 0.1, 0.025, 0x4a3b2a, 0, -0.12, 0.142);
       topLabel(g, '$8.9M', 0.14, 0.07, { fs: 30, fg: '#1a6b3c' }, 0.002, 0.17);
     }
   },
   creditCard: {
     label: 'Credit Card', mass: 0.06, traits: ['grabbable', 'throwable'], size: [0.16, 0.02, 0.1], fric: 0.9,
     build(g) {
-      bx(g, 0.15, 0.012, 0.095, PAL.gold, 0, 0, 0);
-      topLabel(g, 'GOLD', 0.1, 0.05, { fs: 30, fg: '#6b4226', bg: 'none' }, 0.007);
+      bx(g, 0.15, 0.014, 0.095, PAL.gold, 0, 0, 0);
+      bx(g, 0.045, 0.016, 0.095, PAL.slate, -0.045, 0, 0);                   // chip accent
+      topLabel(g, 'GOLD', 0.1, 0.05, { fs: 30, fg: '#6b4226', bg: 'none' }, 0.008);
     }
   },
   trophy: {
@@ -1662,14 +1823,15 @@ const PROP_DEFS = {
     meta: { trophy: true },
     col: () => RAPIER.ColliderDesc.cylinder(0.2, 0.09),
     build(g) {
-      bx(g, 0.14, 0.04, 0.14, 0x5c3a22, 0, -0.19, 0);
-      bx(g, 0.05, 0.08, 0.05, PAL.gold, 0, -0.13, 0);
-      cy(g, 0.055, 0.03, 0.12, PAL.gold, 0, -0.02, 0);
-      const cup = cy(g, 0.08, 0.055, 0.12, PAL.gold, 0, 0.1, 0); cup.scale.set(1.25, 1, 1.25);
-      const h1 = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 5, 10, Math.PI), M(PAL.gold));
-      h1.position.set(0.1, 0.1, 0); h1.rotation.z = -Math.PI / 2; g.add(h1);
-      const h2 = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 5, 10, Math.PI), M(PAL.gold));
-      h2.position.set(-0.1, 0.1, 0); h2.rotation.z = Math.PI / 2; g.add(h2);
+      bx(g, 0.16, 0.05, 0.16, 0x5c3a22, 0, -0.19, 0);
+      bx(g, 0.06, 0.09, 0.06, PAL.gold, 0, -0.13, 0);
+      cy(g, 0.06, 0.035, 0.13, PAL.gold, 0, -0.03, 0);
+      const cup = cy(g, 0.085, 0.058, 0.13, PAL.gold, 0, 0.1, 0); cup.scale.set(1.3, 1, 1.3);
+      tor(g, 0.095, 0.02, PAL.gold, 0, 0.155, 0, { rx: Math.PI / 2 });       // fat rim
+      const h1 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.016, 8, 14, Math.PI), M(PAL.gold));
+      h1.position.set(0.11, 0.1, 0); h1.rotation.z = -Math.PI / 2; g.add(h1);
+      const h2 = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.016, 8, 14, Math.PI), M(PAL.gold));
+      h2.position.set(-0.11, 0.1, 0); h2.rotation.z = Math.PI / 2; g.add(h2);
     }
   },
 };
@@ -1701,6 +1863,7 @@ function spawnProp(type, x, y, z, opts = {}) {
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
   e.collider = world.createCollider(cd, e.body);
   g.userData.eid = addEntity(e).id;
+  if (e.traits.has('grabbable')) addPropShadow(e);
   if (opts.onDesk) e.meta.onDesk = true;
   return e;
 }
@@ -2385,7 +2548,7 @@ class NPC {
     const skin = cfg.boss ? 0xee9c50 : (cfg.skin || 0xf2c19a);
     this.skinBase = new THREE.Color(skin);
     this.skinRage = new THREE.Color(0xe8402a);
-    this.skinMat = new THREE.MeshLambertMaterial({ color: skin });
+    this.skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.45, metalness: 0 });
     this.shirtMat = M(cfg.boss ? 0x262b3d : (cfg.shirt || 0x4f8fd9));
     this.pantsMat = M(cfg.pants || 0x2c2c34);
     const g = this.group;
@@ -2640,12 +2803,12 @@ function makeStatic(type, group, body, col) {
 function makeDesk(type, x, z, w, d, color) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
-  bx(g, w, 0.09, d, color, 0, 0.82, 0);
-  bx(g, 0.1, 0.78, 0.1, PAL.woodDark, -w / 2 + 0.12, 0.39, -d / 2 + 0.12);
-  bx(g, 0.1, 0.78, 0.1, PAL.woodDark, w / 2 - 0.12, 0.39, -d / 2 + 0.12);
-  bx(g, 0.1, 0.78, 0.1, PAL.woodDark, -w / 2 + 0.12, 0.39, d / 2 - 0.12);
-  bx(g, 0.1, 0.78, 0.1, PAL.woodDark, w / 2 - 0.12, 0.39, d / 2 - 0.12);
-  bx(g, w - 0.4, 0.32, 0.05, PAL.woodDark, 0, 0.45, -d / 2 + 0.07);
+  bx(g, w, 0.12, d, color, 0, 0.81, 0);                                      // chunky top
+  bx(g, 0.16, 0.75, 0.16, PAL.slate, -w / 2 + 0.14, 0.375, -d / 2 + 0.14);   // toy legs
+  bx(g, 0.16, 0.75, 0.16, PAL.slate, w / 2 - 0.14, 0.375, -d / 2 + 0.14);
+  bx(g, 0.16, 0.75, 0.16, PAL.slate, -w / 2 + 0.14, 0.375, d / 2 - 0.14);
+  bx(g, 0.16, 0.75, 0.16, PAL.slate, w / 2 - 0.14, 0.375, d / 2 - 0.14);
+  bx(g, w - 0.4, 0.34, 0.09, PAL.slateLight, 0, 0.45, -d / 2 + 0.1);
   const body = staticBody(x, 0.82, z);
   const col = world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, 0.05, d / 2).setFriction(0.8), body);
   surfaces.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, y: 0.875 });
@@ -2654,8 +2817,8 @@ function makeDesk(type, x, z, w, d, color) {
 function makeBin(x, z) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.62, 14, 1, true),
-    new THREE.MeshLambertMaterial({ color: 0x5b6470, side: THREE.DoubleSide }));
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.62, 18, 1, true),
+    M(0x7d94a6, { side: THREE.DoubleSide }));
   wall.position.y = 0.33; wall.castShadow = SHADOWS;
   g.add(wall);
   cy(g, 0.26, 0.26, 0.04, PAL.dark, 0, 0.05, 0);
@@ -2712,9 +2875,11 @@ function makeCabinet(x, z, w, d, h, color) {
 function makeFryer(x, z) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
-  bx(g, 1.1, 0.7, 0.72, 0x7d8894, 0, 0.35, 0);
+  bx(g, 1.1, 0.7, 0.72, PAL.gray, 0, 0.35, 0);
   bx(g, 0.92, 0.06, 0.52, 0x8a5c22, 0, 0.68, 0);
-  bx(g, 0.7, 0.05, 0.4, 0xc8a028, 0, 0.7, 0, { basic: true, mat: { transparent: true, opacity: 0.85 } });
+  bx(g, 0.7, 0.05, 0.4, PAL.metal, 0, 0.71, 0, { metal: true });           // fryer basket
+  bx(g, 0.035, 0.035, 0.5, PAL.metal, -0.38, 0.71, 0, { metal: true });    // basket handles
+  bx(g, 0.035, 0.035, 0.5, PAL.metal, 0.38, 0.71, 0, { metal: true });
   const lab = new THREE.Mesh(GB(0.6, 0.16, 0.01), new THREE.MeshBasicMaterial({ map: labelTex('FRYER 炸爐', { fs: 26, fg: '#ffd93b', bg: '#3a3f47' }) }));
   lab.position.set(0, 0.4, 0.365);
   g.add(lab);
@@ -2746,7 +2911,7 @@ function makeDecorPlant(x, z, big) {
   return makeStatic('plant', g, body, col);
 }
 function buildRoom(pal, opts = {}) {
-  scene.background = new THREE.Color(0x15121f);
+  scene.background = new THREE.Color(PALETTE.sky);
   const floor = new THREE.Mesh(GB(ARENA.hx * 2 + 1, 0.2, ARENA.hz * 2 + 1), M(pal.floor));
   floor.position.y = -0.1;
   floor.receiveShadow = SHADOWS;
@@ -2814,7 +2979,7 @@ function levelOffice() {
     ],
     orderSpot: { x: 4.6, z: 3.6 },
     hints: ['Ruin the laptop with coffee ☕', 'Feed the VIP contract to the shredder 🗂', 'Weaponize the telephone ☎️'],
-    pal: { floor: 0x54486b, wall: 0x3c3355, rug: 0x453a5e, win: '#3a3550' },
+    pal: { floor: 0x8fd0c0, wall: 0xf3f1e7, rug: 0x70c1b3, win: '#bfe3de' },
     lines: {
       calm: [
         { zh: '你做緊乜嘢？！', en: 'WHAT ARE YOU DOING?!' },
@@ -2917,7 +3082,7 @@ function levelOffice() {
       defineObjective('shred_vip', 'VIP CONTRACT SHREDDED 🗂', 25);
       defineObjective('phone_assault', 'PHONE ASSAULT ☎️🤕', 15);
       // ----- NPC -----
-      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0x4f8fd9, pants: 0x33383f, hair: 0x1a120c, lines: this.lines, scale: 1 });
+      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1 });
       npcs.push(npc);
       const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss1);
@@ -2946,7 +3111,7 @@ function levelKitchen() {
     ],
     orderSpot: { x: 0.9, z: 2.8 },
     hints: ['Deep-fry the dirty boot 🥾🍟 then serve it', 'Serve an empty tray 🍽', 'Foam the counter with the extinguisher 🧯'],
-    pal: { floor: 0x4c5158, wall: 0x39404b, rug: 0x454b54, win: '#2b3038' },
+    pal: { floor: 0x7fa8b8, wall: 0xf6efdf, rug: 0x70c1b3, win: '#bfe3de' },
     lines: {
       calm: [
         { zh: '唔該，我個餐呢？', en: 'Excuse me, where is my order?' },
@@ -3018,7 +3183,7 @@ function levelKitchen() {
       defineObjective('boot_served', 'FRIED BOOT SERVED 🥾🍟', 14);
       defineObjective('empty_order', 'EMPTY ORDER 🍽', 15);
       defineObjective('extinguisher', 'EXTINGUISHER CHAOS 🧯', 17);
-      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xd9772f, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02 });
+      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02 });
       npcs.push(npc);
       const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss2);
@@ -3042,7 +3207,7 @@ function levelService() {
     ],
     orderSpot: null,
     hints: ['REJECT the refund claim, then bin it ⛔🗑', 'Destroy the ringing hotline ☎️💥', 'Water + headset console = disaster 💧⚡'],
-    pal: { floor: 0x465064, wall: 0x333d52, rug: 0x3d4759, win: '#2c3547' },
+    pal: { floor: 0x86bbae, wall: 0xf4f1e8, rug: 0xffb4a2, win: '#bfe3de' },
     lines: {
       calm: [
         { zh: '我想投訴呀。', en: 'I would like to complain.' },
@@ -3106,7 +3271,7 @@ function levelService() {
       defineObjective('reject_trash', 'REFUND DENIED & TOSSED 🗑', 14);
       defineObjective('hotline', 'DESTROY HOTLINE ☎️💥', 18);
       defineObjective('water', 'WATER DISASTER 💧⚡', 20);
-      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x6db85c, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0 });
+      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0 });
       npcs.push(npc);
       const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss3);
@@ -3135,7 +3300,7 @@ function levelSales() {
     ],
     orderSpot: null,
     hints: ['Stamp the penthouse contract 99% OFF 📉', 'Smash the POS with champagne 🍾⚡', 'Throw the VIP gift out the exit 🎁🚪'],
-    pal: { floor: 0x3a2f45, wall: 0x4d3550, rug: 0x54405c, win: '#3c2c40' },
+    pal: { floor: 0x55647e, wall: 0x5a4e6e, rug: 0x6e5f8c, win: '#43324e' },
     lines: {
       calm: [
         { zh: '呢層樓真係唔錯。', en: 'This penthouse is nice.' },
@@ -3741,6 +3906,7 @@ function frame(t) {
   updateCamera(dt);
   updateBubbles();
   updateMarker(dt);
+  updatePropShadows();
   updateHud();
   renderer.render(scene, camera);
 }
