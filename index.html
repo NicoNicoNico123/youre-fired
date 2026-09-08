@@ -2638,9 +2638,13 @@ class NPC {
     this.shirtMat = M(cfg.boss ? 0x262b3d : (cfg.shirt || 0x4f8fd9));
     this.pantsMat = M(cfg.pants || 0x2c2c34);
     const g = this.group;
-    // legs
-    bx(g, 0.16, 0.5, 0.2, cfg.pants || 0x2c2c34, -0.11, 0.25, 0).material = this.pantsMat;
-    bx(g, 0.16, 0.5, 0.2, cfg.pants || 0x2c2c34, 0.11, 0.25, 0).material = this.pantsMat;
+    // legs with hip pivots (waddle + walk swing)
+    this.legL = new THREE.Group(); this.legL.position.set(-0.12, 0.5, 0); g.add(this.legL);
+    this.legR = new THREE.Group(); this.legR.position.set(0.12, 0.5, 0); g.add(this.legR);
+    for (const leg of [this.legL, this.legR]) {
+      bx(leg, 0.17, 0.42, 0.21, 0, 0, -0.21, 0).material = this.pantsMat;
+      bx(leg, 0.19, 0.1, 0.3, cfg.shoe || 0x23252e, 0, -0.44, 0.05);       // rounded toy shoe
+    }
     // torso
     this.torso = new THREE.Group();
     this.torso.position.y = 0.5;
@@ -2648,6 +2652,7 @@ class NPC {
     const body = new THREE.Mesh(GCap(0.24, 0.42), this.shirtMat);
     body.position.y = 0.4; body.castShadow = SHADOWS;
     this.torso.add(body);
+    tor(this.torso, 0.14, 0.035, cfg.collar || 0xf7f7f2, 0, 0.62, 0, { rx: Math.PI / 2 }); // collar
     if (cfg.boss) {
       // dark suit, white shirt front and the LOOOONG red tie
       bx(this.torso, 0.2, 0.36, 0.08, 0xffffff, 0, 0.4, 0.18);
@@ -2655,6 +2660,17 @@ class NPC {
       bx(this.torso, 0.11, 0.62, 0.035, 0xd63c2e, 0, 0.22, 0.21);
     } else {
       bx(this.torso, 0.34, 0.1, 0.24, cfg.tie || 0xd63c2e, 0, 0.55, 0).material = M(cfg.tie || 0xd63c2e);
+    }
+    if (cfg.apron) {                                                        // apron + straps
+      bx(this.torso, 0.32, 0.36, 0.05, cfg.apron, 0, 0.3, 0.2);
+      bx(this.torso, 0.05, 0.16, 0.03, cfg.apron, -0.09, 0.6, 0.12, { rz: 0.18 });
+      bx(this.torso, 0.05, 0.16, 0.03, cfg.apron, 0.09, 0.6, 0.12, { rz: -0.18 });
+    }
+    if (cfg.lanyard) {                                                      // office lanyard + badge
+      bx(this.torso, 0.035, 0.26, 0.025, 0x44586f, 0, 0.48, 0.215, { rz: 0.25 });
+      bx(this.torso, 0.035, 0.26, 0.025, 0x44586f, 0, 0.48, 0.215, { rz: -0.25 });
+      bx(this.torso, 0.1, 0.13, 0.03, 0xf7f7f2, 0, 0.28, 0.235);
+      bx(this.torso, 0.06, 0.02, 0.032, 0xff3b30, 0, 0.3, 0.24);
     }
     // arms
     this.armL = new THREE.Group(); this.armL.position.set(-0.3, 0.62, 0); this.torso.add(this.armL);
@@ -2666,6 +2682,10 @@ class NPC {
     const handL = new THREE.Mesh(GS(0.075, 8), this.skinMat); handL.position.y = -0.42; this.armL.add(handL);
     const handR = new THREE.Mesh(GS(0.075, 8), this.skinMat); handR.position.y = -0.42; this.armR.add(handR);
     this.armL.rotation.z = 0.18; this.armR.rotation.z = -0.18;
+    if (cfg.briefcase) {                                                    // client's briefcase in hand
+      bx(this.armR, 0.24, 0.3, 0.08, 0x5c4a33, 0.02, -0.55, 0.02);
+      bx(this.armR, 0.06, 0.03, 0.06, PAL.gold, 0, -0.42, 0.04);
+    }
     // head
     this.head = new THREE.Group();
     this.head.position.y = 1.06;
@@ -2693,28 +2713,63 @@ class NPC {
       hair.scale.set(1.02, 0.72, 1.02); hair.position.y = 0.32;
       this.head.add(hair);
     }
-    // face
+    // face — big readable Overcooked features
     this.eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.pupilMat = new THREE.MeshBasicMaterial({ color: 0x14141c });
     this.eyes = [];
     for (const sx of [-1, 1]) {
-      const white = new THREE.Mesh(GS(0.055, 8), this.eyeMat);
-      white.position.set(0.1 * sx, 0.22, 0.24);
+      const white = new THREE.Mesh(GS(0.075, 10), this.eyeMat);
+      white.position.set(0.105 * sx, 0.22, 0.215);
+      white.scale.set(1, 1.12, 0.55);
       this.head.add(white);
-      const pupil = new THREE.Mesh(GS(0.026, 6), this.pupilMat);
-      pupil.position.set(0.1 * sx, 0.22, 0.283);
+      const pupil = new THREE.Mesh(GS(0.036, 8), this.pupilMat);
+      pupil.position.set(0.105 * sx, 0.215, 0.272);
       this.head.add(pupil);
-      this.eyes.push(white, pupil);
-      const brow = new THREE.Mesh(GB(cfg.boss ? 0.12 : 0.1, 0.022, 0.02), M(cfg.boss ? 0xd9b45c : 0x1a120c));
-      brow.position.set(0.1 * sx, 0.31, 0.26);
-      brow.rotation.z = 0.1 * sx;
+      const glint = new THREE.Mesh(GS(0.013, 6), this.eyeMat);
+      glint.position.set(0.105 * sx + 0.015, 0.248, 0.292);
+      this.head.add(glint);
+      this.eyes.push(white, pupil, glint);
+      const brow = new THREE.Mesh(GB(cfg.boss ? 0.13 : 0.11, 0.03, 0.025), M(cfg.boss ? 0xd9b45c : 0x1a120c));
+      brow.position.set(0.105 * sx, 0.318, 0.245);
+      brow.rotation.z = 0.12 * sx;
       this.head.add(brow);
       if (sx < 0) this.browL = brow; else this.browR = brow;
     }
-    this.mouth = new THREE.Mesh(GB(0.12, 0.028, 0.02), MB(0x5c1e14));
-    this.mouth.position.set(0, 0.06, 0.265);
-    if (cfg.boss) this.mouth.scale.set(0.72, 0.75, 1); // the pursed look
+    const nose = new THREE.Mesh(GS(cfg.boss ? 0.05 : 0.037, 8), this.skinMat);
+    nose.position.set(0, 0.12, 0.262);
+    this.head.add(nose);
+    for (const sx of [-1, 1]) {
+      const ear = new THREE.Mesh(GS(0.05, 8), this.skinMat);
+      ear.scale.set(0.55, 1, 1); ear.position.set(0.27 * sx, 0.2, 0);
+      this.head.add(ear);
+      if (cfg.blush) {
+        const cheek = new THREE.Mesh(GS(0.035, 8), MB(0xff9a8a));
+        cheek.scale.set(1, 0.55, 0.4); cheek.position.set(0.17 * sx, 0.09, 0.222);
+        this.head.add(cheek);
+      }
+    }
+    this.mouth = new THREE.Mesh(GB(0.13, 0.03, 0.02), MB(0x5c1e14));
+    this.mouth.position.set(0, 0.045, 0.258);
+    if (cfg.boss) {
+      this.mouth.scale.set(0.7, 0.7, 1); // the pursed look
+      const jowl = new THREE.Mesh(GS(0.09, 10), this.skinMat);               // chin jowl
+      jowl.scale.set(1.6, 0.62, 0.85); jowl.position.set(0, -0.012, 0.185);
+      this.head.add(jowl);
+    }
     this.head.add(this.mouth);
+    if (cfg.glasses) {
+      for (const sx of [-1, 1]) {
+        tor(this.head, 0.062, 0.012, 0x2e4057, 0.105 * sx, 0.225, 0.235);
+        bx(this.head, 0.16, 0.012, 0.012, 0x2e4057, 0.2 * sx, 0.232, 0.17);  // temples
+      }
+      bx(this.head, 0.05, 0.012, 0.012, 0x2e4057, 0, 0.238, 0.248);          // bridge
+    }
+    if (cfg.cap) {
+      const dome = new THREE.Mesh(GS(0.29, 12), M(cfg.cap));
+      dome.scale.set(1.05, 0.62, 1.05); dome.position.y = 0.365;
+      this.head.add(dome);
+      bx(this.head, 0.32, 0.035, 0.2, cfg.cap, 0, 0.325, 0.25);              // brim
+    }
     // lasers (climax)
     this.lasers = new THREE.Group();
     for (const sx of [-1, 1]) {
@@ -2751,6 +2806,7 @@ class NPC {
     this.sayCd = 0;
     this.walkTarget = null; this.onArrive = null; this.walkSpeed = 1.35;
     this.walkT = 0; this.velX = 0; this.velZ = 0; this.happyT = 0; this.pointT = 0;
+    this.blinkT = U.rand(2, 5); this.blink = 0; this.talkT = 0;
   }
   walkTo(x, z, cb) {
     this.walkTarget = { x, z };
@@ -2858,6 +2914,7 @@ class NPC {
     const tier = r <= 20 ? 'calm' : r <= 40 ? 'annoyed' : r <= 60 ? 'angry' : r <= 80 ? 'furious' : 'extreme';
     const arr = this.cfg.boss ? (BOSS_LINES[tier] || BOSS_LINES.calm) : (this.lines[tier] || this.lines.calm);
     sayBubble(this, U.pick(arr));
+    this.talkT = 1.4;
     if (this.mixer) { this.playClip(/^(yes|no|wave)\b/i); this.clipUntil = U.now() + 1500; }
   }
   update(dt) {
@@ -2899,6 +2956,8 @@ class NPC {
         this.group.rotation.y += dr * Math.min(1, dt * 8);
         this.armL.rotation.x = Math.sin(this.walkT) * 0.55;
         this.armR.rotation.x = -Math.sin(this.walkT) * 0.55;
+        this.legL.rotation.x = -Math.sin(this.walkT) * 0.6;
+        this.legR.rotation.x = Math.sin(this.walkT) * 0.6;
       }
     }
     const k = this.recoil;
@@ -2930,6 +2989,22 @@ class NPC {
     } else if (!walking) {
       this.armL.rotation.x = U.lerp(this.armL.rotation.x, 0, dt * 5);
       this.armR.rotation.x = U.lerp(this.armR.rotation.x, 0, dt * 5);
+    }
+    if (!walking) {
+      this.legL.rotation.x = U.lerp(this.legL.rotation.x, 0, dt * 6);
+      this.legR.rotation.x = U.lerp(this.legR.rotation.x, 0, dt * 6);
+    }
+    // blinking + talking mouth — tiny touches that read as alive
+    this.blinkT -= dt;
+    if (this.blinkT <= 0) { this.blink = 0.13; this.blinkT = U.rand(2.2, 5.4); }
+    this.blink = Math.max(0, this.blink - dt);
+    if (this.talkT > 0) this.talkT = Math.max(0, this.talkT - dt);
+    const lid = this.blink > 0 ? 0.1 : 1;
+    const es = 1 + this.moodT * 0.4;
+    for (const e of this.eyes) e.scale.y = Math.max(0.04, e.scale.x * es * lid);
+    if (this.talkT > 0 && this.mouth) {
+      const base = 1 + this.moodT * 1.8;
+      this.mouth.scale.y = base * (0.55 + Math.abs(Math.sin(this.t * 19)) * 0.85);
     }
     if (game.ringing && this.cfg.ringWatch) this.head.rotation.z = shake * 2;
   }
@@ -3234,7 +3309,7 @@ function levelOffice() {
       defineObjective('shred_vip', 'VIP CONTRACT SHREDDED 🗂', 25);
       defineObjective('phone_assault', 'PHONE ASSAULT ☎️🤕', 15);
       // ----- NPC -----
-      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glb: 'npcCustomer', tint: 0xffb4a2 });
+      npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glasses: true, lanyard: true, glb: 'npcCustomer', tint: 0xffb4a2 });
       npcs.push(npc);
       const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss1);
@@ -3335,7 +3410,7 @@ function levelKitchen() {
       defineObjective('boot_served', 'FRIED BOOT SERVED 🥾🍟', 14);
       defineObjective('empty_order', 'EMPTY ORDER 🍽', 15);
       defineObjective('extinguisher', 'EXTINGUISHER CHAOS 🧯', 17);
-      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02, glb: 'npcCustomer', tint: 0xffcc00 });
+      npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02, cap: 0xff3b30, blush: true, glb: 'npcCustomer', tint: 0xffcc00 });
       npcs.push(npc);
       const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss2);
@@ -3423,7 +3498,7 @@ function levelService() {
       defineObjective('reject_trash', 'REFUND DENIED & TOSSED 🗑', 14);
       defineObjective('hotline', 'DESTROY HOTLINE ☎️💥', 18);
       defineObjective('water', 'WATER DISASTER 💧⚡', 20);
-      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glb: 'npcCustomer', tint: 0x70c1b3 });
+      npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glasses: true, blush: true, glb: 'npcCustomer', tint: 0x70c1b3 });
       npcs.push(npc);
       const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss3);
@@ -3506,7 +3581,7 @@ function levelSales() {
       defineObjective('discount', '99% DISCOUNT 📉😱', 22);
       defineObjective('pos_smash', 'CHAMPAGNE POS SMASH 🍾⚡', 20);
       defineObjective('gift_exit', 'VIP GIFT THROWN OUT 🎁🚪', 20);
-      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, glb: 'npcCustomer', tint: 0x8a93b8 });
+      const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, briefcase: true, glb: 'npcCustomer', tint: 0x8a93b8 });
       npcs.push(client);
       npc = client;
       const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
