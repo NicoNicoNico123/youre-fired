@@ -1,0 +1,27 @@
+# ---- secrets / env ----
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+
+# ---- logs / temp ----
+*.log
+tmp/
+.DS_Store
+Thumbs.db
+
+# ---- dependencies / builds ----
+node_modules/
+dist/
+build/
+.wrangler/
+.dev/
+
+# ---- local tooling ----
+.claude/settings.local.json
+.vscode/
+.idea/
+__pycache__/
+*.pyc
