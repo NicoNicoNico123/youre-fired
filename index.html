@@ -223,6 +223,37 @@
     #hud-hints details{padding:4px 8px;font-size:10px}
     #hud-hints summary{font-size:10px}
   }
+  /* ---------- mobile controls ---------- */
+  #joy { position: fixed; width: 116px; height: 116px; border-radius: 50%;
+    background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.3);
+    z-index: 21; pointer-events: none; display: none; }
+  #joy.on { display: block; }
+  #joy-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
+    margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255,217,59,.4);
+    border: 2px solid rgba(255,217,59,.85); box-shadow: 0 0 14px rgba(255,217,59,.35); }
+  #tut { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%);
+    z-index: 35; background: var(--panel); border: 2px solid var(--yellow);
+    border-radius: 14px; padding: 10px 16px; font-size: 13px; font-weight: 700;
+    color: #fff; text-align: center; pointer-events: auto; max-width: 88vw;
+    box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+  #tut .t { color: var(--yellow); }
+  #tut .dismiss { display: block; margin-top: 4px; font-size: 10px; opacity: .65; }
+  #orient { position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+    z-index: 27; background: var(--panel); border: 2px solid #3a3357; border-radius: 10px;
+    padding: 5px 12px; font-size: 12px; font-weight: 700; color: var(--yellow); display: none; }
+  body.portrait #orient { display: block; }
+  body { -webkit-touch-callout: none; }
+
+  @media (pointer: coarse) {
+    #hud-vol { display: none; }
+    .icobtn { width: 46px; height: 46px; font-size: 21px; }
+    #btn-drop { bottom: 122px; right: calc(14px + env(safe-area-inset-right)); padding: 18px 22px; font-size: 15px; }
+    #btn-recall { bottom: 188px; right: calc(14px + env(safe-area-inset-right)); padding: 14px 18px; }
+    #hud-hints details { opacity: .82; }
+    #hud { padding-left: max(8px, env(safe-area-inset-left));
+           padding-right: max(8px, env(safe-area-inset-right));
+           padding-top: max(8px, env(safe-area-inset-top)); }
+  }
 </style>
 </head>
 <body>
@@ -248,6 +279,7 @@
     <input id="hud-vol" type="range" min="0" max="100" value="70" aria-label="master volume">
     <button id="btn-mute" class="icobtn" title="mute">🔊</button>
     <button id="btn-restart" class="icobtn" title="restart">↺</button>
+    <button id="btn-fs" class="icobtn" title="fullscreen">⛶</button>
     <button id="btn-menu" class="icobtn" title="menu">☰</button>
   </div>
   <div id="hud-hints"><details open><summary>Suggested Chaos 建議搞破壞</summary><ul id="hint-list"></ul></details></div>
@@ -257,6 +289,13 @@
 <div id="announce"></div>
 <div id="toast"></div>
 <div id="flash"></div>
+<div id="joy"><div id="joy-knob"></div></div>
+<div id="tut" class="hidden">
+  <span class="t">👆 Tap an object</span> to grab it · <span class="t">flick</span> to throw<br>
+  <span class="t">🕹 Left thumb</span> walks · <span class="t">drag</span> elsewhere to look<br>
+  <span class="dismiss">tap to dismiss</span>
+</div>
+<div id="orient">🔄 Rotate to landscape for the best view</div>
 
 <div id="intro" class="hidden"><div class="card">
   <div class="no" id="intro-no">STAGE 1 / 4</div>
@@ -971,6 +1010,10 @@ function playerUpdate(dt) {
   const k = player.keys;
   let mx = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
   let mz = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
+  if (U.isMobile && player.moveVec &&
+      (Math.abs(player.moveVec.x) > 0.12 || Math.abs(player.moveVec.z) > 0.12)) {
+    mx = player.moveVec.x; mz = player.moveVec.z;   // virtual stick overrides keys
+  }
   const active = game.state === 'PLAYING' && !game.frozen && (mx || mz);
   if (active) {
     const len = Math.hypot(mx, mz) || 1;
@@ -1183,6 +1226,7 @@ function tryGrab(nx, ny, pointerId) {
   grab.marker.visible = true;
   $('#btn-drop').style.display = 'block';
   audio.play('grab');
+  buzz(12);
   bus.emit(EV.PROP_GRABBED, ent);
   return true;
 }
@@ -1238,6 +1282,7 @@ function grabRelease(e, cancelled, gentle) {
   if (speed > 4.5 && !cancelled && !gentle) {
     stats.thrown++;
     audio.play('whoosh', U.clamp(speed / 14, 0.4, 1));
+    buzz([12, 24, 12]);
     if (speed > 9) cam.fovKick = 4;
     bus.emit(EV.PROP_THROWN, { ent, speed });
   }
@@ -2287,6 +2332,7 @@ function npcHit(zoneEnt, objEnt, rel) {
   const hp = npcRef.headWorldPos();
   addRage(amt, { pos: hp, big: zone === 'head' });
   audio.play('thud', U.clamp(rel / 10, 0.5, 1.1));
+  buzz(22);
   npcRef.react(zone === 'head' ? 'headhit' : 'hit');
   npcRef.sayMaybe(0.75);
   camShake(0.05 + Math.min(0.1, rel / 90), 0.18);
@@ -3933,6 +3979,15 @@ function beginPlay() {
   game.stageStart = U.now();
   npc && npc.sayMaybe(0.5);
   delayed(() => { const h = $('#ctrl-hint'); if (h) h.style.opacity = 0.35; }, 12000);
+  if (U.isMobile) {
+    let seen = false;
+    try { seen = localStorage.getItem('yf_tut') === '1'; } catch (e) {}
+    if (!seen) {
+      $('#tut').classList.remove('hidden');
+      try { localStorage.setItem('yf_tut', '1'); } catch (e) {}
+      delayed(() => { const t = $('#tut'); if (t) t.classList.add('hidden'); }, 7000);
+    }
+  }
 }
 function goMenu() {
   try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
@@ -3960,6 +4015,7 @@ function startClimax() {
     grab.marker.visible = false;
   }
   audio.play('bass', 1);
+  buzz([50, 40, 50, 40, 110]);
   delayed(() => audio.play('buzzer', 1), 250);
   camShake(0.4, 0.7);
   orders.active = null;
@@ -4112,6 +4168,19 @@ function buildMenu() {
 }
 
 /* ------------------------------------------------------------------ input */
+// mobile walk stick + haptics (touch devices only)
+const joy = { id: null, bx: 0, by: 0 };
+function buzz(p) {
+  if (U.isMobile && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} }
+}
+function joyRelease() {
+  joy.id = null;
+  player.moveVec = { x: 0, z: 0 };
+  const j = $('#joy');
+  if (j) j.classList.remove('on');
+  const knob = $('#joy-knob');
+  if (knob) knob.style.transform = '';
+}
 function setupInput() {
   const el = renderer.domElement;
   el.style.touchAction = 'none';
@@ -4133,6 +4202,17 @@ function setupInput() {
       try { el.setPointerCapture && el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
       if (tryGrab(nx, ny, e.pointerId)) { e.preventDefault(); return; }
     }
+    // mobile: empty-space touch in the left zone drives the walk stick
+    if (U.isMobile && game.state === 'PLAYING' && e.clientX < window.innerWidth * 0.42) {
+      joy.id = e.pointerId; joy.bx = e.clientX; joy.by = e.clientY;
+      const j = $('#joy');
+      j.style.left = (e.clientX - 58) + 'px';
+      j.style.top = (e.clientY - 58) + 'px';
+      j.classList.add('on');
+      buzz(8);
+      e.preventDefault();
+      return;
+    }
     // empty space → drag to look (touch / unlocked fallback)
     dragLook = { id: e.pointerId, x: e.clientX, y: e.clientY };
     e.preventDefault();
@@ -4149,16 +4229,27 @@ function setupInput() {
       grab._lx = e.clientX; grab._ly = e.clientY;
       return;
     }
+    if (joy.id !== null && e.pointerId === joy.id) {
+      let dx = e.clientX - joy.bx, dy = e.clientY - joy.by;
+      const len = Math.hypot(dx, dy), max = 48;
+      if (len > max) { dx *= max / len; dy *= max / len; }
+      const knob = $('#joy-knob');
+      if (knob) knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      player.moveVec = { x: dx / max, z: -dy / max };
+      return;
+    }
     if (dragLook && e.pointerId === dragLook.id) {
       playerLook((e.clientX - dragLook.x) * player.dragSens, (e.clientY - dragLook.y) * player.dragSens);
       dragLook.x = e.clientX; dragLook.y = e.clientY;
     }
   }, { passive: true });
   const up = e => {
+    if (joy.id !== null && e.pointerId === joy.id) { joyRelease(); return; }
     if (dragLook && e.pointerId === dragLook.id) dragLook = null;
     if (grab.ent) { grabRelease(e, false, false); grab._lx = grab._ly = null; }
   };
   const cancel = e => {
+    if (joy.id !== null && e.pointerId === joy.id) { joyRelease(); return; }
     if (dragLook && e.pointerId === dragLook.id) dragLook = null;
     if (grab.ent) { grabRelease(e, true, false); grab._lx = grab._ly = null; }
   };
@@ -4190,7 +4281,11 @@ function setupInput() {
     try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
   };
 }
+function updateOrientChip() {
+  document.body.classList.toggle('portrait', U.isMobile && window.innerHeight > window.innerWidth);
+}
 function onResize() {
+  updateOrientChip();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   layoutCamera();
@@ -4198,6 +4293,22 @@ function onResize() {
 
 /* ------------------------------------------------------------------ UI wiring */
 function setupUI() {
+  $('#btn-fs').addEventListener('click', () => {
+    audio.resume(); audio.play('click');
+    if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
+    else if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
+  if (U.isMobile) {
+    const det = document.querySelector('#hud-hints details');
+    if (det) det.removeAttribute('open');
+    $('#tut').addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      $('#tut').classList.add('hidden');
+    });
+  }
+  updateOrientChip();
   $('#btn-drop').addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation();
     audio.resume();

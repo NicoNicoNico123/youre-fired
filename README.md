@@ -41,10 +41,12 @@ The only network dependency is the two CDN modules, so the first load needs inte
 - **Esc** releases the mouse (needed to click HUD / menus)
 
 **📱 Mobile / Touch**
-- **Drag empty space** to look around · everything important is within arm's reach
-- **Touch an object** to grab it — it floats in front of you
+- **🕹 Left-thumb stick** (bottom-left zone) walks · **drag elsewhere** to look
+- **Tap an object** to grab it — it floats in front of you
 - **Flick and release** to throw it
 - **✋ PLACE** sets it down gently · **🧲 RECALL** brings far props back
+- **⛶ Fullscreen** for edge-to-edge play · rotate to landscape for the widest view
+- First launch shows a gesture card; haptic buzzes confirm grabs, throws and hits
 
 **Never stuck:** props stranded beyond arm's reach automatically walk home after ~12
 seconds, and 🧲 RECALL / `R` brings everything back instantly.
