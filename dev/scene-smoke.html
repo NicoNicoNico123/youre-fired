@@ -1,0 +1,43 @@
+<!doctype html><meta charset="utf-8"><title>Scene regression checks</title>
+<style>body{font:14px monospace;background:#172032;color:#e8f1dd}iframe{position:fixed;top:0;left:0;width:1100px;height:700px;border:0;z-index:0}pre{position:relative;z-index:1;white-space:pre-wrap;pointer-events:none;background:#172032dd;width:400px}</style>
+<pre id="results">Running…</pre><iframe src="../index.html"></iframe>
+<script>
+const frame=document.querySelector('iframe'), results=[], errors=[];
+const log=(name,pass,detail='')=>{results.push({name,pass,detail});document.querySelector('#results').textContent=JSON.stringify(results,null,2)};
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn,ms=30000){const end=performance.now()+ms;while(performance.now()<end){if(fn())return;await delay(100)}throw Error('timeout')}
+frame.addEventListener('load',async()=>{
+ const w=frame.contentWindow;
+ w.addEventListener('error',e=>errors.push(e.message));
+ try {
+  await until(()=>w.YF&&w.YF.state()==='MENU');const yf=w.YF;
+  log('Boot and all GLB resources',yf.gltfLoaded().length===8);
+  for(let i=0;i<4;i++){
+   yf.loadStage(i,{backdrop:true});await delay(400);
+   const counts=[yf.entityCount(),yf.colliders(),yf.props().length];
+   const quality=yf.sceneQuality();
+   log('L'+(i+1)+' environment and rendered geometry',quality.environment&&quality.triangles>10000,quality);
+   log('L'+(i+1)+' character meshes visible',yf.npcGlbDebug()?.visible>0);
+   yf.loadStage(i,{backdrop:true});await delay(200);
+   log('L'+(i+1)+' reload preserves entity/collider counts',JSON.stringify(counts)===JSON.stringify([yf.entityCount(),yf.colliders(),yf.props().length]),counts);
+  }
+  yf.loadStage(0,{backdrop:true});yf.game.state='PLAYING';w.YFdisableLock();await delay(500);
+  const canvas=w.document.querySelector('#app canvas');
+  yf.playerTo(.3,4.35);yf.teleport('mug',.5,1.02,3.2);await delay(300);
+  let pos=yf.pos('mug');yf.lookTo(pos.x,pos.y,pos.z);await until(()=>yf.rayGrab()?.type==='mug',6000);
+  log('Mug remains in grab reach',yf.rayGrab()?.type==='mug'&&yf.rayGrab()?.reach,yf.rayGrab());
+  const pointer=(name,buttons)=>canvas.dispatchEvent(new w.PointerEvent(name,{bubbles:true,pointerId:1,pointerType:'mouse',isPrimary:true,clientX:w.innerWidth/2,clientY:w.innerHeight/2,button:0,buttons}));
+  pointer('pointerdown',1);await delay(150);log('Grab polished mug',yf.grab()==='mug');
+  w.dispatchEvent(new w.KeyboardEvent('keydown',{code:'KeyE',bubbles:true}));await delay(150);
+  log('Place releases mug',yf.grab()===null);pointer('pointerup',0);
+  yf.teleport('mug',.5,1.02,3.2);await delay(150);pos=yf.pos('mug');yf.lookTo(pos.x,pos.y,pos.z);await until(()=>yf.rayGrab()?.type==='mug',6000);
+  pointer('pointerdown',1);await delay(150);yf.throwHeld();await delay(100);
+  log('Throw releases into physics',yf.grab()===null&&Math.hypot(...Object.values(yf.propInfo('mug').vel))>.1,yf.propInfo('mug'));
+  yf.loadStage(0,{backdrop:true});yf.game.state='PLAYING';yf.teleport('contract',-3.5,.66,1.3);
+  await until(()=>yf.objectives().shred_vip,12000);
+  log('Shredder sensor still completes objective',yf.objectives().shred_vip);
+  log('No browser runtime errors',errors.length===0,errors);
+ }catch(e){log('Uncaught test failure',false,String(e))}
+ document.body.dataset.passed=String(results.every(r=>r.pass));document.body.dataset.complete='true';
+});
+</script>

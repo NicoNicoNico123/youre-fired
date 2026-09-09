@@ -120,3 +120,20 @@ node e2e-test.mjs                            # prints PASS/FAIL per check + scre
 
 Deploy the finished `index.html` directly to GitHub Pages or Cloudflare Pages with no build
 step required — it is a static single file.
+
+## Scene art and visual review
+
+The four workplaces share rounded toy geometry, satin vinyl and ceramic finishes,
+brushed-metal accents, procedural wood/tile/fabric surfaces, framed daylight windows,
+wall trim, ceiling fixtures, and a reusable studio reflection map. Desktop uses 2048px
+shadows and smoother geometry; mobile uses reduced geometry and existing blob shadows.
+Character GLB colors and material finishes are preserved. Physics envelopes and objectives
+remain defined by the existing colliders and sensors.
+
+With the local HTTP server running, open `dev/scene-review.html` to compare workplaces.
+Use `?level=0` through `?level=3`, append `&wide=1` for a room view, or `&clean=1` for
+an uncluttered capture. `dev/scene-smoke.html` checks all stage loads, character visibility,
+reload counts, mug grab/place/throw, and the shredder objective. Its final body attributes
+are `data-complete="true"` and `data-passed="true"` when all checks pass.
+
+The review and test pages load the actual game in an iframe; run them over HTTP.

@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Workplace scene review</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#18202d}iframe{border:0;width:100%;height:100%}nav{position:fixed;z-index:2;top:16px;left:16px;background:#fff5e5;padding:12px 18px;border-radius:14px;font:14px system-ui;color:#263950;box-shadow:0 4px 20px #0002}a{color:inherit;margin:0 10px}pre{position:fixed;bottom:10px;left:16px;color:white;background:#18202ddd;padding:12px;border-radius:10px;font:12px monospace}</style>
+<nav>WORKPLACE COLLECTION <a href="?level=0">Office</a><a href="?level=1">Kitchen</a><a href="?level=2">Service</a><a href="?level=3">Sales</a></nav>
+<iframe src="../index.html"></iframe><pre id="result">Loading scene…</pre>
+<script>
+const frame=document.querySelector('iframe'), q=new URLSearchParams(location.search), level=Number(q.get('level')||0);
+const errors=[];
+if(q.has('clean')) { document.querySelector('#result').style.display='none'; document.querySelector('nav').textContent=['01 / OFFICE','02 / KITCHEN','03 / CUSTOMER SERVICE','04 / SALES'][level]; }
+frame.addEventListener('load',()=>{
+ const w=frame.contentWindow;
+ w.addEventListener('error',e=>errors.push(e.message));
+ const timer=setInterval(()=>{
+  if(!w.YF || w.YF.state()!=='MENU') return;
+  clearInterval(timer);
+  const yf=w.YF;
+  yf.loadStage(level,{backdrop:true});
+  w.document.querySelectorAll('.screen,#hud,#intro,#loading,#ctrl-hint,#crosshair,#grab-label,#order-banner').forEach(e=>e.style.display='none');
+  if(q.has('wide')) { yf.playerTo(level===1?-3.8:-3.5,level===1?-4.5:5.7); }
+  setTimeout(()=>{
+   const targets=[[.4,.9,1.8],[.9,1.05,2.8],[.2,.85,1.3],[.3,1,1.4]];
+   yf.lookTo(...targets[level]);
+   yf.game.state = 'REVIEW';
+   setTimeout(()=>{
+    const quality=yf.sceneQuality ? yf.sceneQuality():{};
+    document.querySelector('#result').textContent=JSON.stringify({level,state:yf.state(),props:yf.props().length,colliders:yf.colliders(),assets:yf.gltfLoaded().length,errors,...quality},null,2);
+    document.body.dataset.ready='true';
+   },2000);
+  },200);
+ },100);
+});
+</script>
