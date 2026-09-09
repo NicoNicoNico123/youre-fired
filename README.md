@@ -101,8 +101,13 @@ seconds, and 🧲 RECALL / `R` brings everything back instantly.
 |---|---|---|
 | 1 — Office | 3 | Standing still — easy targets while you learn the throw |
 | 2 — Diner | 2 extras | Strolling the dining area between bites |
-| 3 — Call centre | 1 + the complainer | Pacing back and forth |
+| 3 — Call centre | 1 + the complainer | Pacing back and forth — **plus the HR Peacemaker** |
 | 4 — Real estate | 1 + the client | Never stops weaving — the hardest target |
+
+**Level 3 — beware the HR Peacemaker 😌:** a green-haloed HR colleague follows the boss
+around and **cools him down −2.5 RAGE every 4 s** while he's in the building. Throw
+something at him **3 times** and he grabs his box and sprints out (**HR KICKED OUT 🚀**,
++8 rage) — leave him alone and your meter will keep leaking.
 
 Customers are prime rage fuel: hitting one enrages the boss about **1.3× more** than
 hitting a colleague, and head shots score more than body shots.

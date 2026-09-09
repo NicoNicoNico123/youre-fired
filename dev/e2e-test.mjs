@@ -289,6 +289,7 @@ T('L1: COFFEE DISASTER triggered', await waitObjective('coffee'));
 const sh = await page.evaluate(() => YF.sensorPos('shredder'));
 await page.evaluate(([x, y, z]) => YF.teleport('contract', x, y + 0.4, z), [sh.x, sh.y, sh.z]);
 T('L1: VIP CONTRACT SHREDDED', await waitObjective('shred_vip'));
+await calm();   // mid-section: objectives + chaos can reach 100 and end the stage early
 let consumed = true;
 try {
   await page.waitForFunction(() => !YF.props().some(p => p.startsWith('contract:1')), null, { timeout: 4000 });
@@ -350,6 +351,7 @@ await page.evaluate(() => YF.teleport('boot', 0.2, 1.55, 0.6));
 await sleep(100);
 await page.evaluate(() => YF.teleport('tray', 0, 1.05, 0.6));
 T('L2: FRIED BOOT SERVED', await waitObjective('boot_served'));
+await calm();   // mid-section: objectives + chaos can reach 100 and end the stage early
 await page.evaluate(() => YF.teleport('boot', -7.5, 0.3, -6.2));
 await sleep(200);
 // move the tray away first so it re-enters the window sensor as a fresh contact
@@ -406,6 +408,7 @@ T('L3: DESTROY HOTLINE', hotline);
 await page.evaluate(() => YF.teleport('monitor', -2.7, 1.15, 2.5));
 await page.evaluate(() => YF.teleport('waterCup', -1.8, 1.6, 1.85));
 T('L3: WATER DISASTER', await waitObjective('water'));
+await calm();   // mid-section: objectives + chaos can reach 100 and end the stage early
 const hpL3 = await page.evaluate(() => YF.npcPos());
 await page.evaluate(([x, y, z]) => YF.teleport('stamp', x, y + 1.2, z), [hpL3.x, hpL3.y, hpL3.z]);
 T('L3: secret stamp+NPC', await waitSecret('customer_rejected'));
@@ -415,6 +418,36 @@ for (let k = 0; k < 3 && !resolved; k++) {
   resolved = await waitSecret('case_resolved', 4000);
 }
 T('L3: secret complaint+trash', resolved);
+// ---------- 5b. L3 PEACEMAKER (drains rage until kicked out) ----------
+await page.evaluate(() => { const r0 = YF.rage(); YF.addRage(15 - r0); });   // keep headroom: the drain + 3 hits must not fire the climax
+const dr0 = await page.evaluate(() => YF.rage());
+T('L3: HR peacemaker present', !!await page.evaluate(() => YF.peacemaker()));
+await sleep(4600);
+const dr1 = await page.evaluate(() => YF.rage());
+T('L3: peacemaker drains rage', dr1 - dr0 < 0.5, `drift=${(dr1 - dr0).toFixed(2)} over 4.6s`);
+const pmVisible = await page.evaluate(() => !document.querySelector('#calm-chip').classList.contains('hidden'));
+T('L3: calm chip visible while HR present', pmVisible);
+let kicked = false;
+for (let k = 0; k < 5 && !kicked; k++) {
+  const p2 = await page.evaluate(() => YF.peacemaker());
+  if (!p2) break;
+  await page.evaluate(([x, z]) => {
+    if (!YF.teleport('calculator', x, 3.0, z)) YF.spawn('calculator', x, 3.0, z);
+  }, [p2.x, p2.z]);
+  kicked = await waitObjective('kick_hr', 4000);
+  await sleep(600);
+}
+await calm();  // kick-out rage + hits can approach 100 — settle before the despawn waits
+T('L3: 3 hits kick HR out (objective)', kicked);
+let despawned = false;
+try {
+  await page.waitForFunction(() => YF.peacemaker() === null, null, { timeout: 14000 });
+  despawned = true;
+} catch (e) {}
+T('L3: HR despawned after fleeing', despawned, 'pm=' + JSON.stringify(await page.evaluate(() => YF.peacemaker())));
+T('L3: calm chip hidden after kick-out', await page.evaluate(() => document.querySelector('#calm-chip').classList.contains('hidden')));
+T('L3: rage rises again after kick-out', await page.evaluate(() => YF.rage()) > 0);
+
 const r3 = await page.evaluate(() => YF.rage());
 console.log('  L3 rage: ' + r3.toFixed(1));
 await page.screenshot({ path: SHOTS + '05-level3.png' });
@@ -438,6 +471,7 @@ const ex = await page.evaluate(() => YF.sensorPos('exit'));
 T('L4: exit sensor exists', !!ex, JSON.stringify(ex));
 await page.evaluate(([x, y, z]) => YF.teleport('giftBasket', x, y, z), [ex.x, ex.y, ex.z]);
 T('L4: VIP GIFT THROWN OUT', await waitObjective('gift_exit'));
+await calm();   // mid-section: objectives + chaos can reach 100 and end the stage early
 await page.evaluate(() => YF.teleport('stamp', -6.5, 0.4, 4.8));
 await sleep(250);
 const con4b = await page.evaluate(() => YF.pos('contract'));
