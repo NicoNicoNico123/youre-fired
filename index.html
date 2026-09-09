@@ -163,6 +163,8 @@
   .lvlbtn{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;font-size:15px;padding:12px 16px}
   .lvlbtn .zh{font-weight:700;opacity:.85;font-size:12px;text-transform:none}
   .lvlbtn .best{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;opacity:.8;margin-left:8px;text-transform:none}
+  .lvlbtn.locked{opacity:.5;filter:grayscale(.6)}
+  .lvlbtn.locked:hover{transform:none}
   .menurow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 
   #howto .col{text-align:left;font-size:13.5px;line-height:1.55;color:#e6e1fb}
@@ -2334,7 +2336,8 @@ function npcHit(zoneEnt, objEnt, rel) {
   const velF = U.clamp(rel / 8, 1, 1.7);
   const zoneF = zone === 'head' ? 1.6 : zone === 'torso' ? 1.25 : 1.0;
   const key = 'nh:' + objEnt.type + ':' + zone;
-  const amt = Math.min(2.3 * massF * velF * zoneF * repFactor(key) * comboMult(), 6.5);
+  // customers carry the boss's mood — hitting one enrages him even more
+  const amt = Math.min(3.0 * (npcRef.hitMult || 1) * massF * velF * zoneF * repFactor(key) * comboMult(), 9);
   bumpCombo();
   noteVariety(key);
   stats.npcHits++;
@@ -2898,6 +2901,14 @@ class NPC {
     this.sayCd = 0;
     this.walkTarget = null; this.onArrive = null; this.walkSpeed = 1.35;
     this.walkT = 0; this.velX = 0; this.velZ = 0; this.happyT = 0; this.pointT = 0;
+    // wandering customers (higher workplaces keep moving -> harder to hit)
+    this.anchor = { x: cfg.x, z: cfg.z };
+    this.patrolR = cfg.patrolR || 0;
+    this.patrolSpeed = cfg.patrolSpeed || 0.9;
+    this.patrolGap = cfg.patrolGap || [1500, 4000];
+    this.patrolZ = cfg.patrolZ || null;
+    this.patrolNext = U.now() + U.rand(800, 2400);
+    this.hitMult = cfg.hitMult || 1;
     this.blinkT = U.rand(2, 5); this.blink = 0; this.talkT = 0;
   }
   walkTo(x, z, cb) {
@@ -3017,6 +3028,18 @@ class NPC {
     if (this.mixer) {
       if (this.clipUntil && U.now() > this.clipUntil) { this.playClip(/^(idle|standing)$/i); this.clipUntil = 0; }
       this.mixer.update(dt * (1 + game.rage / 70));   // chibi gets frantic as Rage climbs
+    }
+    // wandering: customers stroll around their anchor between orders — a moving
+    // target is a harder target (disabled while they hold an order spot)
+    if (this.patrolR && !this.walkTarget && game.state === 'PLAYING' && !game.frozen &&
+        !(orders.active && orders.npc === this) && U.now() > this.patrolNext) {
+      const a = U.rand(0, Math.PI * 2), r = U.rand(0.5, this.patrolR);
+      const tx = U.clamp(this.anchor.x + Math.cos(a) * r, -7.4, 7.4);
+      const tz = this.patrolZ ? U.clamp(this.anchor.z + Math.sin(a) * r, this.patrolZ[0], this.patrolZ[1])
+                              : U.clamp(this.anchor.z + Math.sin(a) * r, -6.0, 6.0);
+      this.walkSpeed = this.patrolSpeed;
+      this.walkTo(tx, tz, () => { this.walkSpeed = 1.35; });
+      this.patrolNext = U.now() + U.rand(this.patrolGap[0], this.patrolGap[1]);
     }
     // walking toward a counter / order spot
     let walking = false;
@@ -3546,6 +3569,10 @@ function levelOffice() {
       // ----- NPC -----
       npc = new NPC({ x: 3.6, z: 0.8, rotY: -0.75, skin: 0xe8b48c, shirt: 0xff6b6b, pants: 0x2e4057, hair: 0x1a120c, lines: this.lines, scale: 1, glasses: true, lanyard: true, glb: 'npcColleague', tint: 0xffb4a2 });
       npcs.push(npc);
+      // Monday crowd: plenty of stationary targets to learn the throw
+      addCustomer({ x: -3.6, z: -1.8, rotY: 2.4, tint: 0x4ecdc4, shirt: 0x4ecdc4, pants: 0x2e4057, hair: 0x1a120c, cap: 0x1a535c, lines: this.lines });
+      addCustomer({ x: 0.9, z: -2.6, rotY: -1.2, tint: 0xffb4a2, shirt: 0xffb4a2, pants: 0x39404b, hair: 0x3d2c1a, blush: true, lines: this.lines });
+      addCustomer({ x: 2.8, z: -0.4, rotY: 0.4, tint: 0xffe066, shirt: 0xffe066, pants: 0x5b4632, hair: 0x111111, glasses: true, lines: this.lines });
       const boss1 = new NPC({ x: 0.6, z: -5.6, rotY: 0.15, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss1);
       game.bossNpc = boss1;
@@ -3647,6 +3674,11 @@ function levelKitchen() {
       defineObjective('extinguisher', 'EXTINGUISHER CHAOS 🧯', 17);
       npc = new NPC({ x: 0.9, z: 2.8, rotY: Math.PI, skin: 0xf2c19a, shirt: 0xffcc00, pants: 0x5b4632, hair: 0x3d2c1a, lines: this.lines, scale: 1.02, cap: 0xff3b30, blush: true, glb: 'npcCustomer', tint: 0xffcc00 });
       npcs.push(npc);
+      // lunch rush: they wander the dining area between bites
+      addCustomer({ x: -2.9, z: 3.9, rotY: 0.6, tint: 0x8ecae6, shirt: 0x8ecae6, pants: 0x22333b, hair: 0x2a1a0a, lines: this.lines,
+        patrolR: 1.6, patrolSpeed: 0.85, patrolGap: [1400, 3200], patrolZ: [1.8, 5.6] });
+      addCustomer({ x: 3.3, z: 4.4, rotY: -2.2, tint: 0xcdb4db, shirt: 0xcdb4db, pants: 0x39404b, hair: 0x111111, glasses: true, lines: this.lines,
+        patrolR: 1.6, patrolSpeed: 0.85, patrolGap: [1400, 3200], patrolZ: [1.8, 5.6] });
       const boss2 = new NPC({ x: -4.6, z: -4.8, rotY: 0.5, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss2);
       game.bossNpc = boss2;
@@ -3656,6 +3688,16 @@ function levelKitchen() {
 }
 
 let npcs = [];
+// extra crowd per workplace: customers are prime rage fuel (1.3x hit rage);
+// patrol opts make the upper levels weave between moving targets
+function addCustomer(cfg) {
+  const n = new NPC(Object.assign({
+    customer: true, hitMult: 1.3, scale: 1, skin: 0xe8b48c,
+    glb: 'npcCustomer', tint: 0xffcc00,
+  }, cfg));
+  npcs.push(n);
+  return n;
+}
 /* ------------------------------------------------------------ LEVEL 3 ---- */
 function levelService() {
   return {
@@ -3735,6 +3777,10 @@ function levelService() {
       defineObjective('water', 'WATER DISASTER 💧⚡', 20);
       npc = new NPC({ x: 0.6, z: 0.7, rotY: 0, skin: 0xd9a86c, shirt: 0x70c1b3, pants: 0x39404b, hair: 0x111111, lines: this.lines, scale: 1.0, glasses: true, blush: true, glb: 'npcComplainer', tint: 0x70c1b3 });
       npcs.push(npc);
+      // the complainer paces while he argues — harder to land a hit
+      npc.patrolR = 2.0; npc.patrolSpeed = 1.0; npc.patrolGap = [600, 1600]; npc.patrolZ = [-4.5, 2.0];
+      addCustomer({ x: -2.6, z: -1.6, rotY: 1.8, tint: 0xffa69e, shirt: 0xffa69e, pants: 0x22252b, hair: 0x3a3a3a, lines: this.lines,
+        patrolR: 2.2, patrolSpeed: 1.0, patrolGap: [500, 1500], patrolZ: [-4.5, 2.0] });
       const boss3 = new NPC({ x: 4.6, z: -4.8, rotY: -0.3, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss3);
       game.bossNpc = boss3;
@@ -3821,6 +3867,10 @@ function levelSales() {
       const client = new NPC({ x: -1.9, z: 0.5, rotY: 0, skin: 0xe8b48c, shirt: 0x2c3140, pants: 0x22252b, hair: 0x3a3a3a, tie: 0x8a1f6b, lines: this.lines, scale: 1.02, briefcase: true, glb: 'npcClient', tint: 0x8a93b8 });
       npcs.push(client);
       npc = client;
+      // the client never stands still — the hardest target in the building
+      client.patrolR = 2.4; client.patrolSpeed = 1.15; client.patrolGap = [250, 900]; client.patrolZ = [-4.5, 1.8];
+      addCustomer({ x: 2.6, z: -1.6, rotY: -0.8, tint: 0xb8f2e6, shirt: 0xb8f2e6, pants: 0x2e4057, hair: 0x1a120c, cap: 0x0b6e4f, lines: this.lines,
+        patrolR: 2.2, patrolSpeed: 1.1, patrolGap: [300, 1000], patrolZ: [-4.5, 1.8] });
       const boss = new NPC({ x: 0.6, z: -4.8, rotY: 0.12, boss: true, glb: 'npcBoss', skin: 0xee9c50, shirt: 0x262b3d, pants: 0x22252b, tie: 0xd63c2e, lines: this.lines, scale: 1.14 });
       npcs.push(boss);
       game.bossNpc = boss;
@@ -4004,6 +4054,7 @@ function beginPlay() {
 function goMenu() {
   try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
   game.state = 'MENU';
+  buildMenu();
   showScreen('menu');
   game.mode = null;
   loadStage(0, { backdrop: true });
@@ -4069,6 +4120,7 @@ function startClimax() {
 let pendingSubmit = null;
 function finishStage() {
   game.splits[game.stageIndex] = game.stageMs;
+  Progress.unlock(game.stageIndex + 2);   // fired here -> next workplace opens
   bus.emit(EV.STAGE_COMPLETE, { stage: game.stageIndex, ms: game.stageMs });
   const last = game.stageIndex >= 3;
   if (game.mode === 'any' && last) {
@@ -4165,16 +4217,36 @@ function showBoard(tab) {
     list.appendChild(d);
   });
 }
+// stage progression: completing a stage unlocks the next (persisted locally;
+// fail-open to everything unlocked when storage is unavailable, e.g. private mode)
+const Progress = {
+  get() {
+    try {
+      const v = parseInt(localStorage.getItem('yf_unlock') || '1', 10);
+      return Number.isFinite(v) ? U.clamp(v, 1, 4) : 4;
+    } catch (e) { return 4; }
+  },
+  unlock(n) {
+    if (n <= Progress.get()) return;
+    try { localStorage.setItem('yf_unlock', String(n)); } catch (e) {}
+  },
+};
 function buildMenu() {
   const host = $('#m-levels');
   host.innerHTML = '';
+  const unlocked = Progress.get();
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
-    b.className = 'btn lvlbtn';
+    b.className = 'btn lvlbtn' + (i + 1 > unlocked ? ' locked' : '');
     const best = Board.best('s' + (i + 1));
-    b.innerHTML = '<span>LEVEL ' + (i + 1) + ' — ' + L().name + '<br><span class="zh">' + L().zh + '</span></span>' +
-      '<span class="best">🏅 ' + (best != null ? U.fmt(best) : '—') + '</span>';
-    b.onclick = () => { audio.play('click'); startRun(i); };
+    b.innerHTML = '<span>LEVEL ' + (i + 1) + ' — ' + L().name + '<br><span class="zh">' +
+      (i + 1 > unlocked ? '🔒 Reach 100% rage on level ' + i + ' to unlock' : L().zh) + '</span></span>' +
+      '<span class="best">' + (i + 1 > unlocked ? '🔒' : '🏅 ' + (best != null ? U.fmt(best) : '—')) + '</span>';
+    if (i + 1 > unlocked) {
+      b.disabled = true;
+    } else {
+      b.onclick = () => { audio.play('click'); startRun(i); };
+    }
     host.appendChild(b);
   });
 }
@@ -4312,7 +4384,10 @@ function setupUI() {
   $('#ctrl-hint').innerHTML = U.isMobile
     ? '<b>DRAG</b> empty space — look<br><b>TOUCH</b> an object — grab it<br><b>FLICK &amp; RELEASE</b> — throw!<br><b>🧲 RECALL</b> — bring far props back'
     : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props';
-  $('#m-any').onclick = () => { audio.play('click'); startRun('any'); };
+  $('#m-any').onclick = () => {
+    if (Progress.get() < 4) { toast('🔒 Finish all 4 levels to unlock ANY%'); audio.play('buzzer'); return; }
+    audio.play('click'); startRun('any');
+  };
   $('#m-how').onclick = () => { audio.play('click'); showScreen('howto'); };
   $('#how-back').onclick = () => { audio.play('click'); goMenu(); };
   $('#m-board').onclick = () => { audio.play('click'); showBoard('any'); };
@@ -4478,6 +4553,10 @@ window.YF = {
   },
   props: () => { const a = []; for (const e of entities.values()) if (e.kind === 'prop') a.push(e.type + ':' + (e.alive ? 1 : 0)); return a; },
   npcPos: () => npc ? npc.headWorldPos().clone() : null,
+  npcs: () => npcs.filter(n => n.alive).map(n => ({
+    x: +n.group.position.x.toFixed(2), z: +n.group.position.z.toFixed(2),
+    boss: !!(n.cfg && n.cfg.boss), customer: !!n.cfg.customer,
+  })),
   pos: type => {
     for (const e of entities.values()) if (e.kind === 'prop' && e.alive && e.type === type) return e.body.translation();
     return null;
@@ -4519,6 +4598,8 @@ window.YF = {
     const p = camera.position.clone().add(dir.multiplyScalar(d));
     return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2) };
   },
+  progress: () => Progress.get(),
+  unlockAll: () => { Progress.unlock(4); buildMenu(); },
   rayGrab: (nx = 0, ny = 0) => {
     const hit = pickFromNDC(nx, ny, true);
     return hit ? { type: hit.ent.type, dist: +hit.dist.toFixed(2), reach: hit.dist <= GRAB_REACH } : null;

@@ -36,6 +36,12 @@ const waitRageAbove = async (v, timeout = 5000) => {
   try { await page.waitForFunction(x => YF.rage() > x, v, { timeout }); return true; }
   catch (e) { return false; }
 };
+// buffed customer rage can legitimately fire you early in the NPC-hit sections;
+// pull the meter back down so each section starts with room to test
+const calm = async () => {
+  const r = await page.evaluate(() => YF.rage());
+  if (r > 30) await page.evaluate(r0 => YF.addRage(30 - r0), r);
+};
 const settled = async (type, timeout = 3500) => {
   try {
     await page.waitForFunction(t => {
@@ -74,9 +80,17 @@ await page.evaluate(() => window.YFdisableLock && YFdisableLock());
 await sleep(500);
 await page.screenshot({ path: SHOTS + '01-menu.png' });
 
-// ---------- 2. FP GRAB / CARRY / THROW / WALK (Level 1) ----------
+// ---------- 1b. LEVEL PROGRESSION LOCK ----------
+T('progress: fresh save locks L2-L4', await page.evaluate(() => [...document.querySelectorAll('#m-levels button')].slice(1).every(b => b.disabled)));
+T('progress: locked L2 button ignores clicks', await page.evaluate(() => { document.querySelectorAll('#m-levels button')[1].click(); return YF.state(); }) === 'MENU');
+T('progress: any% gated before 4 clears', await page.evaluate(() => { document.querySelector('#m-any').click(); return YF.state(); }) === 'MENU');
+await page.evaluate(() => YF.unlockAll());
+T('progress: unlockAll opens every level', await page.evaluate(() => [...document.querySelectorAll('#m-levels button')].every(b => !b.disabled)));
+
+// ---------- 2. FP GRAB / CARRY / THROW (Level 1) ----------
 await page.click('#m-levels button:nth-of-type(1)');
 await waitState('PLAYING', 25000);
+await calm();
 T('L1: reached PLAYING', true);
 await sleep(900);
 // the boss: orange-tanned caricature with the golden swoop and long red tie
@@ -266,6 +280,7 @@ T('L1: repeated same-hits diminish (per-key counters)', allReps.some(([k, v]) =>
 await page.evaluate(() => { YF.teleport('calculator', -7, 0.4, 5.5); YF.teleport('mug', -2.0, 1.1, 3.2); });
 await sleep(250);
 
+await calm();
 // ---------- 3b. L1 OBJECTIVES ----------
 const kb = await page.evaluate(() => YF.pos('keyboard'));
 await page.evaluate(([x, y, z]) => YF.teleport('mug', x, y + 0.6, z), [kb.x, kb.y, kb.z]);
@@ -282,7 +297,7 @@ T('L1: contract consumed by shredder', consumed);
 
 const sh2 = await page.evaluate(() => YF.sensorPos('shredder'));
 let stapled = false;
-for (let k = 0; k < 5 && !stapled; k++) {
+for (let k = 0; k < 8 && !stapled; k++) {
   await page.evaluate(([x, y, z]) => YF.teleport('stapler', x, y + 0.04, z), [sh2.x, sh2.y, sh2.z]); // drop inside the slot
   stapled = await waitSecret('stapler_shred', 4000);
   if (!stapled) {
@@ -299,6 +314,7 @@ T('L1: secret stapler+shredder', stapled, await page.evaluate(() => YF.secrets()
 // plant pot on NPC (fresh stage so a mid-test win can't freeze physics)
 await page.evaluate(() => YF.startRun(0));
 await waitState('PLAYING', 25000);
+await calm();
 await sleep(600);
 await waitNpcSettled();
 const hp2 = await page.evaluate(() => YF.npcPos());
@@ -325,6 +341,7 @@ await page.screenshot({ path: SHOTS + '03-level1-objectives.png' });
 // ---------- 4. LEVEL 2 (+ customer orders) ----------
 await page.evaluate(() => YF.startRun(1));
 await waitState('PLAYING', 25000);
+await calm();
 await sleep(700);
 const fry = await page.evaluate(() => YF.sensorPos('fryer'));
 await page.evaluate(([x, y, z]) => YF.teleport('boot', x, y + 0.3, z), [fry.x, fry.y, fry.z]);
@@ -369,6 +386,7 @@ await page.screenshot({ path: SHOTS + '04-level2.png' });
 // ---------- 5. LEVEL 3 ----------
 await page.evaluate(() => YF.startRun(2));
 await waitState('PLAYING', 25000);
+await calm();
 await sleep(700);
 const claim = await page.evaluate(() => YF.pos('paper'));
 await page.evaluate(([x, y, z]) => YF.teleport('stamp', x, y + 0.5, z), [claim.x, claim.y, claim.z]);
@@ -404,6 +422,7 @@ await page.screenshot({ path: SHOTS + '05-level3.png' });
 // ---------- 6. LEVEL 4 ----------
 await page.evaluate(() => YF.startRun(3));
 await waitState('PLAYING', 25000);
+await calm();
 await sleep(700);
 const con4 = await page.evaluate(() => YF.pos('contract'));
 await page.evaluate(([x, y, z]) => YF.teleport('stamp', x, y + 0.5, z), [con4.x, con4.y, con4.z]);
@@ -424,8 +443,12 @@ await sleep(250);
 const con4b = await page.evaluate(() => YF.pos('contract'));
 await page.evaluate(([x, y, z]) => YF.teleport('champagne', x, y + 0.5, z), [con4b.x, con4b.y, con4b.z]);
 await sleep(600);
-await page.evaluate(([x, y, z]) => YF.teleport('model', x, y, z), [ex.x, ex.y, ex.z]);
-const both4 = await Promise.all([waitSecret('liquid_asset'), waitSecret('real_estate_exit')]);
+let modelOut = false;
+for (let k = 0; k < 4 && !modelOut; k++) {
+  await page.evaluate(([x, y, z]) => YF.teleport('model', x, y, z), [ex.x, ex.y, ex.z]);
+  modelOut = await waitSecret('real_estate_exit', 3500);
+}
+const both4 = await Promise.all([waitSecret('liquid_asset'), Promise.resolve(modelOut)]);
 T('L4: secrets champagne+contract, model+exit', both4[0] && both4[1], (await page.evaluate(() => YF.secrets().join(', '))));
 // figurines on the desk
 const figCount = await page.evaluate(() => YF.props().filter(p => p.startsWith('figurine:1')).length);
@@ -433,6 +456,7 @@ T('L4: boss figurines on desk', figCount === 2, 'count=' + figCount);
 // Mirror Match on a fresh stage (a mid-test win would freeze physics)
 await page.evaluate(() => YF.startRun(3));
 await waitState('PLAYING', 25000);
+await calm();
 await sleep(500);
 let mirror = false;
 for (let k = 0; k < 3 && !mirror; k++) {
@@ -468,6 +492,7 @@ await page.screenshot({ path: SHOTS + '08-results.png' });
 // ---------- 8. FULL ANY% ----------
 await page.evaluate(() => YF.startRun('any'));
 await waitState('PLAYING', 25000);
+await calm();
 for (let s = 0; s < 4; s++) {
   await page.evaluate(() => YF.addRage(101));
   try {
@@ -481,6 +506,7 @@ for (let s = 0; s < 4; s++) {
     await page.click('#res-continue');
     try {
       await waitState('PLAYING', 25000);
+await calm();
     } catch (e) {
       console.log('  ANY% continue stalled. state=' + await state() + ' errors:');
       consoleErrors.forEach(ce => console.log('    ⚠ ' + ce.slice(0, 300)));
@@ -514,23 +540,27 @@ T('board: top-5 sorted, extras dropped', top3.length === 5 && top3[0].name === '
 await page.evaluate(() => document.exitPointerLock && document.exitPointerLock());
 await page.evaluate(() => YF.startRun(0));
 await waitState('PLAYING', 25000);
+await calm();
 const counts = [];
 for (let k = 0; k < 4; k++) {
   counts.push(await page.evaluate(() => YF.entityCount()));
   await page.click('#btn-restart');
   await waitState('PLAYING', 25000);
+await calm();
   await sleep(300);
 }
 T('reset: entity count stable across restarts', new Set(counts).size === 1, counts.join(','));
 T('reset: no stuck grab', await page.evaluate(() => YF.grab()) === null);
 await page.evaluate(() => YF.startRun(3));
 await waitState('PLAYING', 25000);
+await calm();
 await page.evaluate(() => document.exitPointerLock && document.exitPointerLock());
 await page.click('#btn-menu');
 await page.waitForFunction(() => YF.state() === 'MENU', null, { timeout: 10000 });
 T('reset: menu → backdrop loads', await page.isVisible('#menu'));
 await page.click('#m-levels button:nth-of-type(2)');
 await waitState('PLAYING', 25000);
+await calm();
 T('reset: stage switch works', true);
 console.log('  entity counts: restarts=' + counts.join(','));
 

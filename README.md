@@ -88,9 +88,24 @@ seconds, and 🧲 RECALL / `R` brings everything back instantly.
 
 | Mode | What happens |
 |---|---|
-| **Full Any%** | All 4 stages back-to-back, one continuous timer, stage splits recorded |
+| **Full Any%** | All 4 stages back-to-back, one continuous timer, stage splits recorded — unlocks after all 4 levels are cleared |
 | **Stage runs** | Pick Level 1–4 individually; its own timer and leaderboard |
 | **Leaderboard** | Top-5 per mode, **stored locally on the device** (`localStorage`) — it is not online |
+
+**Level lock:** a fresh save opens with Level 1 only. Push a workplace to 100% rage
+(i.e. get fired) and the next one unlocks — progress is saved on the device.
+
+**The crowd gets meaner as you climb:**
+
+| Level | Customers | Behaviour |
+|---|---|---|
+| 1 — Office | 3 | Standing still — easy targets while you learn the throw |
+| 2 — Diner | 2 extras | Strolling the dining area between bites |
+| 3 — Call centre | 1 + the complainer | Pacing back and forth |
+| 4 — Real estate | 1 + the client | Never stops weaving — the hardest target |
+
+Customers are prime rage fuel: hitting one enrages the boss about **1.3× more** than
+hitting a colleague, and head shots score more than body shots.
 
 Timer starts the instant a stage becomes interactive and stops the moment Rage hits 100%.
 Times are `MM:SS.mmm` from `performance.now()`.
