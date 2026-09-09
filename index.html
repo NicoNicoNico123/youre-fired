@@ -223,14 +223,6 @@
     #hud-hints details{padding:4px 8px;font-size:10px}
     #hud-hints summary{font-size:10px}
   }
-  /* ---------- mobile controls ---------- */
-  #joy { position: fixed; width: 116px; height: 116px; border-radius: 50%;
-    background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.3);
-    z-index: 21; pointer-events: none; display: none; }
-  #joy.on { display: block; }
-  #joy-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
-    margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255,217,59,.4);
-    border: 2px solid rgba(255,217,59,.85); box-shadow: 0 0 14px rgba(255,217,59,.35); }
   #tut { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%);
     z-index: 35; background: var(--panel); border: 2px solid var(--yellow);
     border-radius: 14px; padding: 10px 16px; font-size: 13px; font-weight: 700;
@@ -289,10 +281,9 @@
 <div id="announce"></div>
 <div id="toast"></div>
 <div id="flash"></div>
-<div id="joy"><div id="joy-knob"></div></div>
 <div id="tut" class="hidden">
   <span class="t">👆 Tap</span> to grab · <span class="t">👆👆 Double-tap</span> to use · <span class="t">swipe ⬆</span> to throw<br>
-  <span class="t">🕹 Corner stick</span> walks · <span class="t">hold + drag</span> elsewhere to look<br>
+  <span class="t">hold + drag</span> empty space to look<br>
   <span class="dismiss">tap to dismiss</span>
 </div>
 <div id="orient">🔄 Rotate to landscape for the best view</div>
@@ -333,13 +324,13 @@
     <div class="col">
       <div class="sect"><b>🖥️ Desktop — first person</b><br>
         • <b>Click</b> the screen once to lock the mouse, then <b>move the mouse to look around</b><br>
-        • <b>W A S D</b> to walk around your workplace<br>
+        • You play <b>from your station</b> — no walking, everything is within reach<br>
         • <b>Left-click</b> an object to grab it — it floats in front of your hands<br>
         • <b>Flick the mouse and release</b> (left-click) to hurl it!<br>
         • <b>Right-click</b> or <b>E</b> = gentle place · <b>Mouse wheel</b> = reach closer / farther<br>
         • <b>R</b> = 🧲 recall props you threw too far</div>
       <div class="sect"><b>📱 Mobile / Touch — first person</b><br>
-        • <b>Drag empty space</b> to look around · <b>WASD-less</b>: everything is within reach<br>
+        • <b>Drag empty space</b> to look around — you play from your station, everything is within reach<br>
         • <b>Touch an object</b> to grab it — it floats in front of you<br>
         • <b>Flick and release</b> to throw it!<br>
         • <b>✋ PLACE button</b> sets it down gently · <b>🧲 RECALL</b> brings far props back</div>
@@ -988,7 +979,9 @@ const player = {
   keys: {}, locked: false, sens: 0.0022, dragSens: 0.0045,
   lookSamples: [], holdDist: 1.3, body: null,
 };
-const GRAB_REACH = 4.8;
+// you can't walk, so your hands reach anywhere you can see (the L4 exit door
+// sits ~10.6 m from the spawn — reach must cover the whole workplace)
+const GRAB_REACH = 12;
 function lookDir(out) {
   const cp = Math.cos(player.pitch);
   return out.set(-Math.sin(player.yaw) * cp, Math.sin(player.pitch), -Math.cos(player.yaw) * cp);
@@ -1007,32 +1000,10 @@ function playerLook(dx, dy) {
   while (player.lookSamples.length > 14) player.lookSamples.shift();
 }
 function playerUpdate(dt) {
-  const k = player.keys;
-  let mx = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
-  let mz = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0);
-  if (U.isMobile && player.moveVec &&
-      (Math.abs(player.moveVec.x) > 0.12 || Math.abs(player.moveVec.z) > 0.12)) {
-    mx = player.moveVec.x; mz = player.moveVec.z;   // virtual stick overrides keys
-  }
-  const active = game.state === 'PLAYING' && !game.frozen && (mx || mz);
-  if (active) {
-    const len = Math.hypot(mx, mz) || 1;
-    const sp = 2.7;
-    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
-    const rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
-    const vx = (rx * mx + fx * mz) / len * sp;
-    const vz = (rz * mx + fz * mz) / len * sp;
-    player.pos.x = U.clamp(player.pos.x + vx * dt, -8.7, 8.7);
-    player.pos.z = U.clamp(player.pos.z + vz * dt, -6.3, 6.3);
-    player.moveVel.x = vx; player.moveVel.z = vz;
-    const prev = player.bob;
-    player.bobT += dt * 9.5;
-    player.bob = Math.sin(player.bobT) * 0.035;
-    if (prev > 0 && player.bob <= 0) audio.play('thud', 0.16);
-  } else {
-    player.moveVel.x = 0; player.moveVel.z = 0;
-    player.bob *= Math.pow(0.001, dt);
-  }
+  // you play from your station: no walking — look, grab, throw. The long grab
+  // reach keeps every workplace playable from where you stand.
+  player.moveVel.x = 0; player.moveVel.z = 0;
+  player.bob *= Math.pow(0.001, dt);
 }
 function createPlayerBody() {
   player.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased()
@@ -4209,18 +4180,9 @@ function buildMenu() {
 }
 
 /* ------------------------------------------------------------------ input */
-// mobile walk stick + haptics (touch devices only)
-const joy = { id: null, bx: 0, by: 0 };
+// haptics (touch devices only)
 function buzz(p) {
   if (U.isMobile && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) {} }
-}
-function joyRelease() {
-  joy.id = null;
-  player.moveVec = { x: 0, z: 0 };
-  const j = $('#joy');
-  if (j) j.classList.remove('on');
-  const knob = $('#joy-knob');
-  if (knob) knob.style.transform = '';
 }
 function setupInput() {
   const el = renderer.domElement;
@@ -4235,19 +4197,6 @@ function setupInput() {
         const p = el.requestPointerLock();
         if (p && p.catch) p.catch(() => {});
       } catch (err) { /* lock unavailable — drag-look fallback */ }
-    }
-    // mobile: the bottom-left zone is RESERVED for the walk stick — it wins over
-    // grabbing so a prop under the thumb never hijacks movement
-    if (U.isMobile && game.state === 'PLAYING' &&
-        e.clientX < 150 && e.clientY > window.innerHeight - 280) {
-      joy.id = e.pointerId; joy.bx = e.clientX; joy.by = e.clientY;
-      const j = $('#joy');
-      j.style.left = (e.clientX - 58) + 'px';
-      j.style.top = (e.clientY - 58) + 'px';
-      j.classList.add('on');
-      buzz(8);
-      e.preventDefault();
-      return;
     }
     const wantGrab = game.state === 'PLAYING' && !grab.ent && !game.frozen && !cam.tween;
     if (wantGrab) {
@@ -4274,15 +4223,6 @@ function setupInput() {
       grab._lx = e.clientX; grab._ly = e.clientY;
       return;
     }
-    if (joy.id !== null && e.pointerId === joy.id) {
-      let dx = e.clientX - joy.bx, dy = e.clientY - joy.by;
-      const len = Math.hypot(dx, dy), max = 48;
-      if (len > max) { dx *= max / len; dy *= max / len; }
-      const knob = $('#joy-knob');
-      if (knob) knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      player.moveVec = { x: dx / max, z: -dy / max };
-      return;
-    }
     if (dragLook && e.pointerId === dragLook.id) {
       const k = player.dragSens / player.sens;
       playerLook((e.clientX - dragLook.x) * k, (e.clientY - dragLook.y) * k);
@@ -4290,7 +4230,6 @@ function setupInput() {
     }
   }, { passive: true });
   const up = e => {
-    if (joy.id !== null && e.pointerId === joy.id) { joyRelease(); return; }
     if (dragLook && e.pointerId === dragLook.id) {
       if (U.now() - dragLook.t0 < 260 &&
           Math.hypot(e.clientX - dragLook.sx, e.clientY - dragLook.sy) < 14) {
@@ -4301,7 +4240,6 @@ function setupInput() {
     if (grab.ent) { grabRelease(e, false, false); grab._lx = grab._ly = null; }
   };
   const cancel = e => {
-    if (joy.id !== null && e.pointerId === joy.id) { joyRelease(); return; }
     if (dragLook && e.pointerId === dragLook.id) dragLook = null;
     if (grab.ent) { grabRelease(e, true, false); grab._lx = grab._ly = null; }
   };
@@ -4373,7 +4311,7 @@ function setupUI() {
   });
   $('#ctrl-hint').innerHTML = U.isMobile
     ? '<b>DRAG</b> empty space — look<br><b>TOUCH</b> an object — grab it<br><b>FLICK &amp; RELEASE</b> — throw!<br><b>🧲 RECALL</b> — bring far props back'
-    : '<b>MOUSE</b> look · <b>WASD</b> walk<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props';
+    : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props';
   $('#m-any').onclick = () => { audio.play('click'); startRun('any'); };
   $('#m-how').onclick = () => { audio.play('click'); showScreen('howto'); };
   $('#how-back').onclick = () => { audio.play('click'); goMenu(); };

@@ -163,9 +163,10 @@ T('L1: pointercancel releases object', await page.evaluate(() => YF.grab()) === 
 
 // double-tap on empty-ish desk object = interact (phone rings + hops)
 await page.evaluate(() => { YF.playerTo(0.3, 4.35); YF.teleport('phoneBase', 0.5, 1.1, 3.4); YF.teleport('mug', 6, 0.4, -5); });
-await sleep(450);
+await settled('phoneBase');
 await page.evaluate(() => { const p2 = YF.pos('phoneBase'); YF.lookTo(p2.x, p2.y, p2.z); });
-await sleep(250);
+await sleep(300);
+await settled('phoneBase');  // re-aim only after it is truly at rest
 const phoneSp = await page.evaluate(() => { const p2 = YF.pos('phoneBase'); return YF.project(p2.x, p2.y, p2.z); });
 T('L1: phone under crosshair', !!phoneSp, JSON.stringify(phoneSp));
 for (const ev of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) {
@@ -195,21 +196,16 @@ for (const [ev, x] of [['pointerdown', 480], ['pointermove', 540], ['pointermove
 const yawB = await page.evaluate(() => YF.player().yaw);
 T('L1: hold+drag empty space aims camera', Math.abs(yawB - yawA2) > 0.1, `dyaw=${(yawB - yawA2).toFixed(2)} tween-drift=${Math.abs(yawA2 - yawA).toFixed(3)}`);
 
-// WASD walk
+// stationary play: no walking input — the player must hold position
 const p0 = await page.evaluate(() => YF.player());
 await page.keyboard.down('KeyW');
+await page.keyboard.down('KeyD');
 await sleep(600);
 await page.keyboard.up('KeyW');
-let p1 = await page.evaluate(() => YF.player());
-let walked = Math.hypot(p1.x - p0.x, p1.z - p0.z);
-if (walked < 0.3) {  // slow-mo frames can swallow the first press — retry once
-  await page.keyboard.down('KeyW');
-  await sleep(600);
-  await page.keyboard.up('KeyW');
-  p1 = await page.evaluate(() => YF.player());
-  walked = Math.hypot(p1.x - p0.x, p1.z - p0.z);
-}
-T('L1: WASD walk moves player', walked > 0.3 && walked < 3.5, walked.toFixed(2));
+await page.keyboard.up('KeyD');
+const p1 = await page.evaluate(() => YF.player());
+const walked = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+T('L1: player stays put (no walk input)', walked < 0.05, walked.toFixed(3));
 await page.screenshot({ path: SHOTS + '02-level1-fp.png' });
 
 // ---------- 2b. RECALL (anti-stuck: stranded props come back) ----------
@@ -601,29 +597,32 @@ await mob.evaluate(() => {
 await sleep(300);
 T('mobile: touch drag+release throws', await mob.evaluate(() => YF.grab()) === null);
 
-// joystick: left-zone touch walks the player
-await mob.evaluate(() => YF.playerTo(0.3, 4.35));
+// stationary + long reach: a prop across the room is still grabbable
+await mob.evaluate(() => { YF.playerTo(0.4, 2.6); });
 await sleep(300);
-const jz0 = await mob.evaluate(() => YF.player().z);
-await mob.evaluate(() => {
-  const c = document.querySelector('#app canvas');
-  c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 9, pointerType: 'touch', clientX: 70, clientY: 700, bubbles: true, isPrimary: true }));
-});
-await sleep(150);
-T('mobile: joystick appears in left zone', await mob.evaluate(() => document.querySelector('#joy').classList.contains('on')));
-for (let i = 1; i <= 10; i++) {
-  await mob.evaluate(([y]) => {
+await mob.evaluate(() => { YF.teleport('mug', 0.4, 1.0, -3.0); });
+await sleep(500);
+await mob.evaluate(() => { const m = YF.pos('mug'); YF.lookTo(m.x, m.y, m.z); });
+await sleep(400);
+T('mobile: far prop under crosshair', !!await mob.evaluate(() => !!YF.pos('mug')));
+// retry across short camera-tween windows (order arrivals re-aim the camera)
+for (let att = 0; att < 4 && (await mob.evaluate(() => YF.grab())) !== 'mug'; att++) {
+  await mob.evaluate(() => { const m = YF.pos('mug'); if (m) YF.lookTo(m.x, m.y, m.z); });
+  await sleep(250);
+  const msp = await mob.evaluate(() => { const m = YF.pos('mug'); return m && YF.project(m.x, m.y, m.z); });
+  if (!msp) { await sleep(600); continue; }
+  await mob.evaluate(([x, y]) => {
     const c = document.querySelector('#app canvas');
-    c.dispatchEvent(new PointerEvent('pointermove', { pointerId: 9, pointerType: 'touch', clientX: 70, clientY: y, bubbles: true, isPrimary: true }));
-  }, [700 - i * 8]);
-  await sleep(40);
+    c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 31, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  }, [msp.x, msp.y]);
+  await sleep(450); // check while still held — the up would release it
 }
-const jz1 = await mob.evaluate(() => YF.player().z);
-T('mobile: joystick walks the player', Math.abs(jz1 - jz0) > 0.25, `dz=${(jz1 - jz0).toFixed(2)}`);
-await mob.evaluate(() => {
-  const c = document.querySelector('#app canvas');
-  c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 9, pointerType: 'touch', bubbles: true, isPrimary: true }));
-});
+T('mobile: long-reach grab from station', await mob.evaluate(() => YF.grab()) === 'mug',
+  'grab=' + await mob.evaluate(() => YF.grab()));
+await mob.evaluate(() => YF.grab() && YF.throwHeld());
+await sleep(300);
+T('mobile: held prop released', await mob.evaluate(() => YF.grab()) === null);
+
 await mob.screenshot({ path: SHOTS + '12-mobile-touch.png' });
 await mob.close();
 

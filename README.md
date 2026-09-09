@@ -33,16 +33,16 @@ The only network dependency is the two CDN modules, so the first load needs inte
 
 **🖥️ Desktop**
 - Click once to **lock the mouse**, then move the mouse to **look around**
-- **W A S D** to walk around your workplace
-- **Left-click** an object to grab it — it floats in front of your hands
+- You play **from your station** — no walking; your hands reach anything you can see
+- **Left-click** an object to grab it — it flies to your hands and floats in front of you
 - **Flick the mouse and release** (left-click) to hurl it — the flick punches it forward along your aim
 - **Right-click / E** = gentle place · **Mouse wheel** = reach closer / farther
 - **R** (or the 🧲 RECALL button) = return props you threw too far back to their spots
 - **Esc** releases the mouse (needed to click HUD / menus)
 
 **📱 Mobile / Touch**
-- **🕹 Left-thumb stick** (reserved bottom-left corner) walks · **hold and drag anywhere else** to look
-- **Tap an object** to grab it — it floats in front of you
+- **Hold and drag** empty space to look around
+- **Tap an object** to grab it — it flies to your hands and floats in front of you
 - **Flick and release** to throw it (swipe up while holding for extra loft)
 - **Double-tap an object** to interact — ring the bell, answer the phone, stamp, smash…
 - **Tap a customer** to hear their order chat
