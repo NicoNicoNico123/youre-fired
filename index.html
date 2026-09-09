@@ -291,8 +291,8 @@
 <div id="flash"></div>
 <div id="joy"><div id="joy-knob"></div></div>
 <div id="tut" class="hidden">
-  <span class="t">👆 Tap an object</span> to grab it · <span class="t">flick</span> to throw<br>
-  <span class="t">🕹 Left thumb</span> walks · <span class="t">drag</span> elsewhere to look<br>
+  <span class="t">👆 Tap</span> to grab · <span class="t">👆👆 Double-tap</span> to use · <span class="t">swipe ⬆</span> to throw<br>
+  <span class="t">🕹 Corner stick</span> walks · <span class="t">hold + drag</span> elsewhere to look<br>
   <span class="dismiss">tap to dismiss</span>
 </div>
 <div id="orient">🔄 Rotate to landscape for the best view</div>
@@ -1218,6 +1218,7 @@ function tryGrab(nx, ny, pointerId) {
   const ent = hit.ent, b = ent.body;
   grab.ent = ent; grab.active = true;
   grab.pointerId = pointerId != null ? pointerId : null;
+  grab.startT = U.now();
   grab.holdDist = player.holdDist = U.clamp(hit.dist, 0.85, 2.4);
   b.setGravityScale(0, true);
   b.setLinvel({ x: 0, y: 1.4, z: 0 }, true);
@@ -1276,9 +1277,19 @@ function grabRelease(e, cancelled, gentle) {
   b.setGravityScale(1, true);
   b.setLinvel({ x: vx, y: vy, z: vz }, true);
   const speed = Math.hypot(vx, vy, vz);
+  const wasTap = !cancelled && !gentle &&
+    (U.now() - (grab.startT || 0)) < 260 && speed < 2.5;
   grab.ent = null; grab.active = false; grab.pointerId = null;
   $('#btn-drop').style.display = 'none';
   bus.emit(EV.PROP_RELEASED, { ent, speed });
+  if (wasTap) {
+    if (lastTap && lastTap.id === ent.id && U.now() - lastTap.t < 500) {
+      lastTap = null;
+      interactProp(ent);
+    } else {
+      lastTap = { id: ent.id, t: U.now() };
+    }
+  }
   if (speed > 4.5 && !cancelled && !gentle) {
     stats.thrown++;
     audio.play('whoosh', U.clamp(speed / 14, 0.4, 1));
@@ -1458,6 +1469,36 @@ const ASSET_MANIFEST = {
   boot: { url: 'assets/boot.glb' },
   champagne: { url: 'assets/champagne.glb' },
 };
+let lastTap = null;          // { id, t } for double-tap detection
+let lastInteractType = '';   // debug/test hook
+function interactProp(e) {
+  if (game.state !== 'PLAYING' || !e.alive || !e.body) return;
+  const pos = centerOf(e);
+  const sounds = { bell: 'beep', phoneBase: 'ring', handset: 'ring',
+                   extinguisher: 'foam', posMachine: 'beep', champagne: 'pop' };
+  audio.play(sounds[e.type] || 'pop', 0.9);
+  if (e.type === 'extinguisher') FX.foam(pos);
+  if (e.type === 'bell' && e.mesh) {
+    e.mesh.scale.setScalar(1.3);
+    delayed(() => { if (e.mesh) e.mesh.scale.setScalar(1); }, 130);
+  }
+  e.body.applyImpulse({ x: 0, y: e.mass * 3.2, z: 0 }, true);   // happy hop
+  buzz(10);
+  lastInteractType = e.type;
+}
+function tapNPC(cx, cy) {
+  for (const n of npcs) {
+    if (!n.alive) continue;
+    for (const oy of [2.0 * n.baseScale, 1.0 * n.baseScale]) {
+      const p = worldToScreen({ x: n.group.position.x, y: oy, z: n.group.position.z });
+      if (!p.behind && Math.hypot(p.x - cx, p.y - cy) < 130) {
+        n.react('happy'); n.sayMaybe(1); buzz(10);
+        return true;
+      }
+    }
+  }
+  return false;
+}
 const gltfLoader = new GLTFLoader();
 const gltfCache = new Map();
 function loadGlbEntry(entry) {
@@ -4195,15 +4236,10 @@ function setupInput() {
         if (p && p.catch) p.catch(() => {});
       } catch (err) { /* lock unavailable — drag-look fallback */ }
     }
-    const wantGrab = game.state === 'PLAYING' && !grab.ent && !game.frozen && !cam.tween;
-    if (wantGrab) {
-      const nx = player.locked ? 0 : (e.clientX / window.innerWidth) * 2 - 1;
-      const ny = player.locked ? 0 : -(e.clientY / window.innerHeight) * 2 + 1;
-      try { el.setPointerCapture && el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
-      if (tryGrab(nx, ny, e.pointerId)) { e.preventDefault(); return; }
-    }
-    // mobile: empty-space touch in the left zone drives the walk stick
-    if (U.isMobile && game.state === 'PLAYING' && e.clientX < window.innerWidth * 0.42) {
+    // mobile: the bottom-left zone is RESERVED for the walk stick — it wins over
+    // grabbing so a prop under the thumb never hijacks movement
+    if (U.isMobile && game.state === 'PLAYING' &&
+        e.clientX < 150 && e.clientY > window.innerHeight - 280) {
       joy.id = e.pointerId; joy.bx = e.clientX; joy.by = e.clientY;
       const j = $('#joy');
       j.style.left = (e.clientX - 58) + 'px';
@@ -4213,8 +4249,15 @@ function setupInput() {
       e.preventDefault();
       return;
     }
+    const wantGrab = game.state === 'PLAYING' && !grab.ent && !game.frozen && !cam.tween;
+    if (wantGrab) {
+      const nx = player.locked ? 0 : (e.clientX / window.innerWidth) * 2 - 1;
+      const ny = player.locked ? 0 : -(e.clientY / window.innerHeight) * 2 + 1;
+      try { el.setPointerCapture && el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+      if (tryGrab(nx, ny, e.pointerId)) { e.preventDefault(); return; }
+    }
     // empty space → drag to look (touch / unlocked fallback)
-    dragLook = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    dragLook = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: U.now() };
     e.preventDefault();
   }, { passive: false });
   el.addEventListener('pointermove', e => {
@@ -4223,9 +4266,11 @@ function setupInput() {
       return;
     }
     if (grab.ent && grab.pointerId != null && e.pointerId === grab.pointerId) {
-      // holding an object: dragging aims your view (and the held object with it)
-      playerLook((e.clientX - (grab._lx == null ? e.clientX : grab._lx)) * player.dragSens,
-        (e.clientY - (grab._ly == null ? e.clientY : grab._ly)) * player.dragSens);
+      // holding an object: dragging aims your view (and the held object with it).
+      // playerLook applies player.sens itself — dragSens is a per-pixel ratio on top.
+      const k = player.dragSens / player.sens;
+      playerLook((e.clientX - (grab._lx == null ? e.clientX : grab._lx)) * k,
+        (e.clientY - (grab._ly == null ? e.clientY : grab._ly)) * k);
       grab._lx = e.clientX; grab._ly = e.clientY;
       return;
     }
@@ -4239,13 +4284,20 @@ function setupInput() {
       return;
     }
     if (dragLook && e.pointerId === dragLook.id) {
-      playerLook((e.clientX - dragLook.x) * player.dragSens, (e.clientY - dragLook.y) * player.dragSens);
+      const k = player.dragSens / player.sens;
+      playerLook((e.clientX - dragLook.x) * k, (e.clientY - dragLook.y) * k);
       dragLook.x = e.clientX; dragLook.y = e.clientY;
     }
   }, { passive: true });
   const up = e => {
     if (joy.id !== null && e.pointerId === joy.id) { joyRelease(); return; }
-    if (dragLook && e.pointerId === dragLook.id) dragLook = null;
+    if (dragLook && e.pointerId === dragLook.id) {
+      if (U.now() - dragLook.t0 < 260 &&
+          Math.hypot(e.clientX - dragLook.sx, e.clientY - dragLook.sy) < 14) {
+        tapNPC(e.clientX, e.clientY);
+      }
+      dragLook = null;
+    }
     if (grab.ent) { grabRelease(e, false, false); grab._lx = grab._ly = null; }
   };
   const cancel = e => {
@@ -4521,7 +4573,14 @@ window.YF = {
   secrets: () => [...unlockedSecrets],
   reps: () => [...repCounts.entries()],
   gltfLoaded: () => [...gltfCache.keys()],
+  lastInteract: () => lastInteractType,
+  project: (x, y, z) => { const p2 = worldToScreen({ x, y, z }); return p2.behind ? null : { x: Math.round(p2.x), y: Math.round(p2.y) }; },
   sceneQuality: () => ({ environment: !!scene.environment, draws: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, shadowSize: SHADOWS ? 2048 : 0 }),
+  aimPoint: (d = 1.3) => {
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    const p = camera.position.clone().add(dir.multiplyScalar(d));
+    return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2) };
+  },
   rayGrab: (nx = 0, ny = 0) => {
     const hit = pickFromNDC(nx, ny, true);
     return hit ? { type: hit.ent.type, dist: +hit.dist.toFixed(2), reach: hit.dist <= GRAB_REACH } : null;

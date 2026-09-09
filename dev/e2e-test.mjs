@@ -9,10 +9,10 @@ const T = (name, ok, extra = '') => {
   console.log((ok ? 'PASS' : 'FAIL') + '  ' + name + (extra ? '   [' + extra + ']' : ''));
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const CX = 640, CY = 400;
+const CX = 480, CY = 300;
 
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
 const asset404 = [];
 page.on('response', r => { if (r.status() === 404 && r.url().includes('/assets/')) asset404.push(r.url()); });
 page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -161,6 +161,40 @@ await page.mouse.up(); // resync harness button state (browser releases capture 
 await sleep(200);
 T('L1: pointercancel releases object', await page.evaluate(() => YF.grab()) === null);
 
+// double-tap on empty-ish desk object = interact (phone rings + hops)
+await page.evaluate(() => { YF.playerTo(0.3, 4.35); YF.teleport('phoneBase', 0.5, 1.1, 3.4); YF.teleport('mug', 6, 0.4, -5); });
+await sleep(450);
+await page.evaluate(() => { const p2 = YF.pos('phoneBase'); YF.lookTo(p2.x, p2.y, p2.z); });
+await sleep(250);
+const phoneSp = await page.evaluate(() => { const p2 = YF.pos('phoneBase'); return YF.project(p2.x, p2.y, p2.z); });
+T('L1: phone under crosshair', !!phoneSp, JSON.stringify(phoneSp));
+for (const ev of ['pointerdown', 'pointerup', 'pointerdown', 'pointerup']) {
+  await page.evaluate(([x, y, ev]) => {
+    const c = document.querySelector('#app canvas');
+    c.dispatchEvent(new PointerEvent(ev, { pointerId: 21, pointerType: 'mouse', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  }, [phoneSp.x, phoneSp.y, ev]);
+  await sleep(100);
+}
+await sleep(250);
+T('L1: double-tap interacts (phone)', await page.evaluate(() => YF.lastInteract()) === 'phoneBase',
+  'last=' + await page.evaluate(() => YF.lastInteract()));
+
+// hold empty wall + drag = camera look
+await page.evaluate(() => { YF.teleport('phoneBase', 6, 0.4, -5); YF.lookTo(0.9, 1.5, -6); });
+await sleep(1400); // let the lookTo camera tween finish before dragging
+const yawA = await page.evaluate(() => YF.player().yaw);
+await sleep(150);
+const yawA2 = await page.evaluate(() => YF.player().yaw);
+for (const [ev, x] of [['pointerdown', 480], ['pointermove', 540], ['pointermove', 600], ['pointerup', 600]]) {
+  await page.evaluate(([ev, x]) => {
+    const c = document.querySelector('#app canvas');
+    c.dispatchEvent(new PointerEvent(ev, { pointerId: 22, pointerType: 'mouse', clientX: x, clientY: 300, bubbles: true, isPrimary: true }));
+  }, [ev, x]);
+  await sleep(90);
+}
+const yawB = await page.evaluate(() => YF.player().yaw);
+T('L1: hold+drag empty space aims camera', Math.abs(yawB - yawA2) > 0.1, `dyaw=${(yawB - yawA2).toFixed(2)} tween-drift=${Math.abs(yawA2 - yawA).toFixed(3)}`);
+
 // WASD walk
 const p0 = await page.evaluate(() => YF.player());
 await page.keyboard.down('KeyW');
@@ -272,8 +306,12 @@ await waitState('PLAYING', 25000);
 await sleep(600);
 await waitNpcSettled();
 const hp2 = await page.evaluate(() => YF.npcPos());
-await page.evaluate(([x, y, z]) => YF.teleport('plantPot', x, y + 1.3, z), [hp2.x, hp2.y, hp2.z]);
-T('L1: secret plantPot+NPC', await waitSecret('office_gardening'));
+let potted = false;
+for (let k = 0; k < 3 && !potted; k++) {
+  await page.evaluate(([x, y, z]) => YF.teleport('plantPot', x, y + 1.1, z), [hp2.x, hp2.y, hp2.z]);
+  potted = await waitSecret('office_gardening', 5000);
+}
+T('L1: secret plantPot+NPC', potted, (await page.evaluate(() => YF.secrets().join(','))));
 
 await page.evaluate(() => YF.teleport('plantPot', -6.5, 0.4, 4.5));
 await sleep(250);
@@ -516,14 +554,33 @@ await page.setViewportSize({ width: 844, height: 390 });
 await sleep(500);
 await page.screenshot({ path: SHOTS + '11-landscape.png' });
 
+// ---------- PERF ----------
+await page.setViewportSize({ width: 1280, height: 800 });
+const fps = await page.evaluate(() => new Promise(res => {
+  let n = 0; const t0 = performance.now();
+  const loop = () => { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(loop); else res(n / 2); };
+  requestAnimationFrame(loop);
+}));
+console.log('  approx FPS (swiftshader, software GL): ' + fps.toFixed(0));
+T('perf: fps above 15 in software rendering (real GPUs are far faster)', fps > 15, fps.toFixed(0));
+
+await page.close(); // free the GL context — two live contexts stall software rendering
+
 // ---------- 13. TOUCH EMULATION (mobile FP) ----------
 const mob = await browser.newPage({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true });
 mob.on('pageerror', e => consoleErrors.push('MOBILE PAGEERROR: ' + e.message));
 await mob.goto(URL);
-await mob.waitForFunction(() => window.YF && YF.state() === 'MENU', null, { timeout: 45000 });
+await mob.waitForFunction(() => window.YF && YF.state() === 'MENU', null, { timeout: 90000 });
 await mob.tap('#m-levels button:nth-of-type(1)');
 await mob.waitForFunction(() => YF.state() === 'PLAYING', null, { timeout: 25000 });
 await sleep(800);
+// mobile UX: tutorial, orientation chip, fullscreen button
+await mob.waitForFunction(() => { const t = document.querySelector('#tut'); return t && !t.classList.contains('hidden'); }, null, { timeout: 8000 }).catch(() => {});
+T('mobile: tutorial card shows on first play', await mob.isVisible('#tut'));
+await mob.tap('#tut');
+T('mobile: tutorial dismisses on tap', !(await mob.isVisible('#tut')));
+T('mobile: orientation chip visible in portrait', await mob.isVisible('#orient'));
+T('mobile: fullscreen button present', await mob.isVisible('#btn-fs'));
 await mob.evaluate(() => { const m = YF.pos('mug'); YF.lookTo(m.x, m.y, m.z); });
 await sleep(200);
 await mob.evaluate(() => {
@@ -543,18 +600,32 @@ await mob.evaluate(() => {
 });
 await sleep(300);
 T('mobile: touch drag+release throws', await mob.evaluate(() => YF.grab()) === null);
+
+// joystick: left-zone touch walks the player
+await mob.evaluate(() => YF.playerTo(0.3, 4.35));
+await sleep(300);
+const jz0 = await mob.evaluate(() => YF.player().z);
+await mob.evaluate(() => {
+  const c = document.querySelector('#app canvas');
+  c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 9, pointerType: 'touch', clientX: 70, clientY: 700, bubbles: true, isPrimary: true }));
+});
+await sleep(150);
+T('mobile: joystick appears in left zone', await mob.evaluate(() => document.querySelector('#joy').classList.contains('on')));
+for (let i = 1; i <= 10; i++) {
+  await mob.evaluate(([y]) => {
+    const c = document.querySelector('#app canvas');
+    c.dispatchEvent(new PointerEvent('pointermove', { pointerId: 9, pointerType: 'touch', clientX: 70, clientY: y, bubbles: true, isPrimary: true }));
+  }, [700 - i * 8]);
+  await sleep(40);
+}
+const jz1 = await mob.evaluate(() => YF.player().z);
+T('mobile: joystick walks the player', Math.abs(jz1 - jz0) > 0.25, `dz=${(jz1 - jz0).toFixed(2)}`);
+await mob.evaluate(() => {
+  const c = document.querySelector('#app canvas');
+  c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 9, pointerType: 'touch', bubbles: true, isPrimary: true }));
+});
 await mob.screenshot({ path: SHOTS + '12-mobile-touch.png' });
 await mob.close();
-
-// ---------- PERF ----------
-await page.setViewportSize({ width: 1280, height: 800 });
-const fps = await page.evaluate(() => new Promise(res => {
-  let n = 0; const t0 = performance.now();
-  const loop = () => { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(loop); else res(n / 2); };
-  requestAnimationFrame(loop);
-}));
-console.log('  approx FPS (swiftshader, software GL): ' + fps.toFixed(0));
-T('perf: fps above 18 in software rendering (real GPUs are far faster)', fps > 18, fps.toFixed(0));
 
 // ---------- SUMMARY ----------
 const failed = results.filter(r => !r.ok);

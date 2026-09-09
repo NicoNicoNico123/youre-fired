@@ -41,9 +41,11 @@ The only network dependency is the two CDN modules, so the first load needs inte
 - **Esc** releases the mouse (needed to click HUD / menus)
 
 **📱 Mobile / Touch**
-- **🕹 Left-thumb stick** (bottom-left zone) walks · **drag elsewhere** to look
+- **🕹 Left-thumb stick** (reserved bottom-left corner) walks · **hold and drag anywhere else** to look
 - **Tap an object** to grab it — it floats in front of you
-- **Flick and release** to throw it
+- **Flick and release** to throw it (swipe up while holding for extra loft)
+- **Double-tap an object** to interact — ring the bell, answer the phone, stamp, smash…
+- **Tap a customer** to hear their order chat
 - **✋ PLACE** sets it down gently · **🧲 RECALL** brings far props back
 - **⛶ Fullscreen** for edge-to-edge play · rotate to landscape for the widest view
 - First launch shows a gesture card; haptic buzzes confirm grabs, throws and hits
@@ -96,7 +98,7 @@ Times are `MM:SS.mmm` from `performance.now()`.
 ## 7. Four-point verification checklist
 
 All four points are exercised by the automated harness in [`dev/e2e-test.mjs`](dev/e2e-test.mjs)
-(64 checks against headless Chrome; final runs: **64/64 passing, 0 console errors**).
+(80 checks against headless Chrome, including mobile touch emulation; final runs: **80/80 passing, 0 console errors**).
 
 1. **WASM initialization** — ✅ Rapier `init()` completes, physics world + event queue are
    created before gameplay; failure path shows a readable error box instead of a blank screen.
