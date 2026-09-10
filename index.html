@@ -15,7 +15,7 @@
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#0d0b14;
-    font-family:var(--font);color:var(--white);touch-action:none;overscroll-behavior:none;
+    font-family:var(--font);color:var(--white);overscroll-behavior:none;
     -webkit-user-select:none;user-select:none;position:fixed;inset:0}
   canvas{display:block;touch-action:none}
   #app{position:fixed;inset:0;z-index:0}
@@ -55,7 +55,7 @@
   /* ---------- HUD ---------- */
   #hud{position:fixed;inset:0;z-index:20;pointer-events:none;
     padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
-  #hud-tl{position:absolute;top:8px;left:10px;background:var(--panel);border-radius:12px;padding:7px 12px;
+  #hud-tl{position:absolute;top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));background:var(--panel);border-radius:12px;padding:7px 12px;
     border:2px solid #3a3357;max-width:46vw}
   #hud-stage{font-weight:900;font-size:15px;color:var(--yellow);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #hud-career{font-size:11px;color:#cfc9ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -75,35 +75,38 @@
   .ragehigh #hud-ragewrap{animation:rageShake .12s linear infinite}
   @keyframes rageShake{0%,100%{transform:translateX(calc(-50% - 1px))}50%{transform:translateX(calc(-50% + 1px))}}
 
-  #hud-btns{position:absolute;top:8px;right:10px;display:flex;gap:6px;align-items:center;pointer-events:auto}
+  #hud-btns{position:absolute;top:max(8px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));display:flex;gap:6px;align-items:center;pointer-events:auto}
   .icobtn{width:42px;height:42px;border-radius:12px;border:2px solid #3a3357;background:var(--panel);color:#fff;
     font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .icobtn:active{transform:scale(.92)}
-  #hud-vol{width:64px;accent-color:var(--yellow);pointer-events:auto}
+  #hud-vol{width:64px;accent-color:var(--yellow);pointer-events:auto;background:transparent;border:none}
 
-  #hud-hints{position:absolute;left:10px;bottom:10px;max-width:240px;pointer-events:auto}
+  #hud-hints{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));max-width:240px;pointer-events:auto}
   #hud-hints details{background:var(--panel);border:2px solid #3a3357;border-radius:12px;padding:8px 10px;font-size:12px}
   #hud-hints summary{cursor:pointer;font-weight:900;color:var(--yellow);font-size:12px;letter-spacing:.5px;list-style:none}
   #hud-hints li{margin:5px 0 0 4px;color:#d8d3ef;list-style:none}
+  #hud-hints details:not([open]) ul{display:none}
   #hud-hints li:before{content:"★ ";color:var(--orange)}
 
   /* ---------- first person ---------- */
-  #crosshair{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;
-    background:rgba(255,255,255,.85);box-shadow:0 0 6px rgba(0,0,0,.7);transition:transform .12s, background .12s, opacity .12s}
+  #crosshair{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:rgba(255,255,255,.9);border:2px solid rgba(20,18,30,.55);box-shadow:0 0 6px rgba(0,0,0,.7);
+    transition:transform .12s, background .12s, opacity .12s}
   #crosshair.hot{transform:scale(1.7);background:var(--yellow);box-shadow:0 0 10px rgba(255,217,59,.9)}
-  #crosshair.far{opacity:.4;background:#8b93a5}
+  #crosshair.far{opacity:.8;background:#8b93a5;border-style:dashed}
+  #hud-rpct{text-shadow:0 1px 3px #000,0 0 7px rgba(0,0,0,.95)}
   #hud-order{position:absolute;top:64px;left:50%;transform:translateX(-50%);background:var(--panel);
     border:2px solid var(--orange);border-radius:12px;padding:6px 16px;font-weight:900;font-size:14px;color:#fff;
     display:none;white-space:nowrap;animation:pop .25s ease-out}
   #hud-order b{color:var(--yellow)}
-  #ctrl-hint{position:absolute;right:10px;bottom:10px;background:var(--panel);border:2px solid #3a3357;border-radius:12px;
+  #ctrl-hint{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));background:var(--panel);border:2px solid #3a3357;border-radius:12px;
     padding:8px 12px;font-size:11.5px;color:#cfc9ea;line-height:1.6;transition:opacity 1s;max-width:250px}
   #ctrl-hint b{color:var(--yellow)}
   #btn-drop{position:absolute;right:16px;bottom:96px;pointer-events:auto;display:none;
     font-weight:900;font-size:15px;color:#1a1826;background:var(--green);border:none;border-radius:14px;
     padding:16px 20px;box-shadow:0 4px 0 #1f8f52}
   #btn-drop:active{transform:translateY(3px);box-shadow:0 1px 0 #1f8f52}
-  #btn-recall{position:absolute;right:16px;bottom:150px;pointer-events:auto;
+  #btn-recall{position:absolute;right:16px;bottom:150px;pointer-events:auto;min-height:46px;
     font-weight:900;font-size:13px;color:#fff;background:#2f6fd9;border:none;border-radius:14px;
     padding:12px 16px;box-shadow:0 4px 0 #1c4a99}
   #btn-recall:active{transform:translateY(3px);box-shadow:0 1px 0 #1c4a99}
@@ -133,7 +136,7 @@
   @keyframes annPop{0%{opacity:0;transform:scale(.4) rotate(-4deg)}14%{opacity:1;transform:scale(1.18) rotate(1deg)}
     26%{transform:scale(1)}78%{opacity:1}100%{opacity:0;transform:scale(1.05) translateY(-24px)}}
 
-  #toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:26;pointer-events:none}
+  #toast{position:fixed;top:104px;left:50%;transform:translateX(-50%);z-index:26;pointer-events:none}
   #toast div{background:#123c2b;border:2px solid var(--green);color:#c9ffe8;font-weight:800;font-size:14px;
     border-radius:12px;padding:8px 16px;margin-top:6px;white-space:nowrap;animation:toastIn 2.6s ease-out forwards}
   @keyframes toastIn{0%{opacity:0;transform:translateY(-12px)}8%{opacity:1;transform:translateY(0)}80%{opacity:1}100%{opacity:0}}
@@ -154,7 +157,14 @@
 
   /* ---------- menus ---------- */
   .panel{background:var(--panel);border:3px solid #3a3357;border-radius:20px;padding:20px 22px;max-width:520px;width:94vw;
-    max-height:88vh;overflow-y:auto;text-align:center}
+    max-height:88vh;overflow-y:auto;text-align:center;scrollbar-width:thin;scrollbar-color:#4a4370 transparent}
+  #howto .panel,#board .panel,#results .panel{display:flex;flex-direction:column;overflow:hidden}
+  #howto .col,#results .col{overflow-y:auto;flex:1 1 auto;min-height:0;scrollbar-width:thin;scrollbar-color:#4a4370 transparent;
+    -webkit-mask-image:linear-gradient(180deg,#000 92%,transparent);mask-image:linear-gradient(180deg,#000 92%,transparent)}
+  .panel .col::-webkit-scrollbar{width:6px}
+  .panel .col::-webkit-scrollbar-thumb{background:#4a4370;border-radius:3px}
+  #board-list::-webkit-scrollbar{width:6px}
+  #board-list::-webkit-scrollbar-thumb{background:#4a4370;border-radius:3px}
   .panel h1{font-size:clamp(28px,7vw,50px);font-weight:900;font-style:italic;color:var(--yellow);
     text-shadow:3px 3px 0 #8e1712;line-height:1.05}
   .panel h1 .zh{display:block;font-size:clamp(15px,3.6vw,24px);font-style:normal;color:#fff;text-shadow:none;margin-top:4px}
@@ -163,7 +173,25 @@
   .lvlbtn{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;font-size:15px;padding:12px 16px}
   .lvlbtn .zh{font-weight:700;opacity:.85;font-size:12px;text-transform:none}
   .lvlbtn .best{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;opacity:.8;margin-left:8px;text-transform:none}
-  .lvlbtn.locked{opacity:.5;filter:grayscale(.6)}
+  .lvlbtn.locked{opacity:.6;filter:grayscale(.6)}
+  .lvlbtn.locked .zh{color:#efeaff}
+  .btn.locked{opacity:.6;filter:grayscale(.55)}
+  #volwrap{display:flex;align-items:center;height:42px;background:var(--panel);border:2px solid #3a3357;border-radius:12px;padding:0 10px}
+  #volwrap:before{content:'🔊';font-size:15px;margin-right:7px}
+  #res-pb:empty{display:none}
+  #res-name{border:2px dashed #4a4370;border-radius:10px;background:#141126;color:var(--yellow)}
+  #res-name:focus{outline:none;border-color:var(--yellow);border-style:solid}
+  #crosshint{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);display:none;
+    font-weight:900;font-size:11px;letter-spacing:1px;color:#ffb4a2;text-shadow:1px 1px 2px #000}
+  #crosshint.on{display:block}
+  #hud-hints summary::after{content:' ▾';color:var(--yellow)}
+  #hud-hints details[open] summary::after{content:' ▴'}
+  @media (prefers-reduced-motion: reduce){
+    .ragehigh #hud-ragewrap{animation:none}
+    #fired-en,#fired-zh{animation:none;transform:none}
+    #flash{display:none}
+  }
+  body.meme #hud{display:none}
   .lvlbtn.locked:hover{transform:none}
   .menurow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 
@@ -208,13 +236,18 @@
     animation:firedIn .5s cubic-bezier(.2,2.4,.4,1) forwards}
   #fired-zh{font-size:clamp(22px,6vw,52px);font-weight:900;color:#fff;transform:rotate(-7deg) scale(2);opacity:0;
     text-shadow:3px 3px 0 #4d0000;animation:firedIn .5s .18s cubic-bezier(.2,2.4,.4,1) forwards}
+  #fired-en{font-size:clamp(24px,11.5vw,88px);white-space:nowrap}
   @keyframes firedIn{0%{opacity:0;transform:rotate(-7deg) scale(3)}100%{opacity:1;transform:rotate(-7deg) scale(1)}}
 
   /* ---------- mobile ---------- */
   @media (max-width:760px){
     #hud-tl{padding:5px 9px}
-    #hud-stage{font-size:12px}#hud-career{font-size:9px}#hud-timer{font-size:15px}
-    #hud-ragewrap{width:46vw}#hud-rlabel{font-size:10px}#hud-rbar{height:15px}#hud-rpct{font-size:10px;line-height:12px}
+    #hud-stage{font-size:12px}#hud-career{font-size:11px}#hud-timer{font-size:15px}
+    #hud-ragewrap{top:64px;width:min(92vw,380px)}
+    #hud-rlabel{font-size:10px}#hud-rbar{height:15px}#hud-rpct{font-size:10px;line-height:12px}
+    #hud-order{top:114px}
+    #toast{top:152px}
+    #calm-chip{top:202px}
     #hud-combo{font-size:13px}
     .icobtn{width:38px;height:38px;font-size:16px}
     #hud-vol{width:44px}
@@ -225,12 +258,12 @@
     #hud-hints details{padding:4px 8px;font-size:10px}
     #hud-hints summary{font-size:10px}
   }
-  #tut { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%);
+  #tut { position: fixed; left: 50%; bottom: 250px; transform: translateX(-50%);
     z-index: 35; background: var(--panel); border: 2px solid var(--yellow);
     border-radius: 14px; padding: 10px 16px; font-size: 13px; font-weight: 700;
     color: #fff; text-align: center; pointer-events: auto; max-width: 88vw;
     box-shadow: 0 6px 18px rgba(0,0,0,.5); }
-  #calm-chip { position: fixed; left: 50%; top: 112px; transform: translateX(-50%);
+  #calm-chip { position: fixed; left: 50%; top: 146px; transform: translateX(-50%);
     z-index: 30; background: var(--panel); border: 2px solid #58c98a; border-radius: 12px;
     padding: 7px 14px; font-size: 12px; font-weight: 700; color: #b8f2d0;
     max-width: calc(100vw - 20px); white-space: normal; text-align: center;
@@ -238,10 +271,11 @@
   #calm-chip b { color: #7bd389; }
   #calm-chip.hidden { display: none; }
   #tut .t { color: var(--yellow); }
-  #tut .dismiss { display: block; margin-top: 4px; font-size: 10px; opacity: .65; }
-  #orient { position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  #tut .dismiss { display: block; margin-top: 5px; font-size: 12px; opacity: .9; }
+  #orient { position: fixed; bottom: 118px; left: 50%; transform: translateX(-50%);
     z-index: 27; background: var(--panel); border: 2px solid #3a3357; border-radius: 10px;
-    padding: 5px 12px; font-size: 12px; font-weight: 700; color: var(--yellow); display: none; }
+    padding: 5px 12px; font-size: 12px; font-weight: 700; color: var(--yellow); display: none;
+    pointer-events: none; }
   body.portrait #orient { display: block; }
   body { -webkit-touch-callout: none; }
 
@@ -249,7 +283,7 @@
     #hud-vol { display: none; }
     .icobtn { width: 46px; height: 46px; font-size: 21px; }
     #btn-drop { bottom: 122px; right: calc(14px + env(safe-area-inset-right)); padding: 18px 22px; font-size: 15px; }
-    #btn-recall { bottom: 188px; right: calc(14px + env(safe-area-inset-right)); padding: 14px 18px; }
+    #btn-recall { bottom: 188px; right: calc(14px + env(safe-area-inset-right)); padding: 14px 18px; min-height: 48px; }
     #hud-hints details { opacity: .82; }
     #hud { padding-left: max(8px, env(safe-area-inset-left));
            padding-right: max(8px, env(safe-area-inset-right));
@@ -267,17 +301,18 @@
     <div id="hud-timer">00:00.000</div>
   </div>
   <div id="hud-ragewrap">
-    <div id="hud-rlabel">😤 BOSS RAGE 幂怒值</div>
+    <div id="hud-rlabel">😤 BOSS RAGE 憤怒值</div>
     <div id="hud-rbar"><div id="hud-rfill"></div><div id="hud-rpct">0%</div></div>
     <div id="hud-combo">CHAOS ×2</div>
   </div>
   <div id="hud-order"></div>
   <div id="crosshair"></div>
+  <div id="crosshint">TOO FAR 太遠</div>
   <button id="btn-recall">🧲 RECALL</button>
   <button id="btn-drop">✋ PLACE</button>
   <div id="ctrl-hint"></div>
   <div id="hud-btns">
-    <input id="hud-vol" type="range" min="0" max="100" value="70" aria-label="master volume">
+    <span id="volwrap" title="volume 音量"><input id="hud-vol" type="range" min="0" max="100" value="70" aria-label="master volume 音量"></span>
     <button id="btn-mute" class="icobtn" title="mute">🔊</button>
     <button id="btn-restart" class="icobtn" title="restart">↺</button>
     <button id="btn-fs" class="icobtn" title="fullscreen">⛶</button>
@@ -291,12 +326,12 @@
 <div id="toast"></div>
 <div id="flash"></div>
 <div id="tut" class="hidden">
-  <span class="t">👆 Tap</span> to grab · <span class="t">👆👆 Double-tap</span> to use · <span class="t">swipe ⬆</span> to throw<br>
-  <span class="t">hold + drag</span> empty space to look<br>
-  <span class="dismiss">tap to dismiss</span>
+  <span class="t">👆 Tap</span> to grab 攞嘢 · <span class="t">👆👆</span> double-tap to use 用 · <span class="t">swipe ⬆</span> to throw 掟<br>
+  <span class="t">hold + drag</span> empty space to look 拖空位睇四周<br>
+  <span class="dismiss">✕ tap to dismiss · 點一下關閉</span>
 </div>
 <div id="orient">🔄 Rotate to landscape for the best view</div>
-<div id="calm-chip" class="hidden">😌 <b>HR PEACEMAKER</b> cooling the boss <b>−2.5 RAGE / 4s</b> · hit him <span id="calm-hits">0/3</span>× to kick him out</div>
+<div id="calm-chip" class="hidden">😌 <b>HR PEACEMAKER</b> cooling the boss <b>−2.5 RAGE / 4s</b><br>— hit <b>HIM</b>, the green-halo guy, <span id="calm-hits">0/3</span>× to send him home 擲嘢中佢3次</div>
 
 <div id="intro" class="hidden"><div class="card">
   <div class="no" id="intro-no">STAGE 1 / 4</div>
@@ -315,11 +350,11 @@
     <h1>SPEEDRUN:<br>YOU'RE FIRED!<span class="zh">《鬥快被炒魷魚！》</span></h1>
     <div class="sub">FIRST-PERSON workplace sabotage. Be the worst employee ever — reach <b style="color:var(--red)">100% BOSS RAGE</b> as fast as you can.<br>
       第一人身工作破壞 — 盡快激怒老闆到 100%！</div>
-    <div style="margin-top:12px">
+    <div class="col" style="margin-top:12px">
       <button id="m-any" class="btn red" style="width:100%;font-size:19px">🏁 FULL ANY% SPEEDRUN<br>
-        <span style="font-size:11px;font-weight:700;text-transform:none">All 4 stages, one continuous timer · 四關連續計時</span></button>
+        <span id="m-any-sub" style="font-size:11px;font-weight:700;text-transform:none">All 4 stages, one continuous timer · <span style="white-space:nowrap">四關連續計時</span></span></button>
+      <div style="margin-top:8px" id="m-levels"></div>
     </div>
-    <div style="margin-top:8px" id="m-levels"></div>
     <div class="menurow" style="margin-top:10px">
       <button id="m-board" class="btn ghost">🏆 Leaderboards</button>
       <button id="m-how" class="btn ghost">❓ How to Play</button>
@@ -332,6 +367,10 @@
   <div class="panel">
     <h2>HOW TO PLAY 玩法</h2>
     <div class="col">
+      <div class="sect"><b>📖 快速重點 QUICK REFERENCE</b><br>
+        • 電腦 Desktop：滑鼠睇四周 · 左鍵攞嘢 · 甩手掟嘢 · 右鍵/E 輕輕放低 · R 收返遠嘢 · <b>Esc 放開滑鼠</b><br>
+        • 手機 Mobile：拖空位睇四周 · 撳物件攞嘢 · 向上掃掟嘢 · 連點兩下用 · ✋ 放低 · 🧲 收返<br>
+        • 客人落單 — 上錯嘢或掟嘢佢身上 = 更多Rage！打滿 100% Rage 即被炒！</div>
       <div class="sect"><b>🖥️ Desktop — first person</b><br>
         • <b>Click</b> the screen once to lock the mouse, then <b>move the mouse to look around</b><br>
         • You play <b>from your station</b> — no walking, everything is within reach<br>
@@ -362,7 +401,7 @@
   <div class="panel">
     <h2>🏆 LEADERBOARD <span style="font-size:13px;color:#cfc9ea">(this device 本機)</span></h2>
     <div id="board-tabs"></div>
-    <div id="board-list"></div>
+    <div id="board-list" style="overflow-y:auto;flex:1 1 auto;min-height:0;scrollbar-width:thin;scrollbar-color:#4a4370 transparent"></div>
     <div class="menurow">
       <button id="board-clear" class="btn ghost small">🗑 Clear Scores</button>
       <button id="board-back" class="btn">⬅ Back</button>
@@ -372,6 +411,7 @@
 
 <div id="results" class="screen hidden">
   <div class="panel">
+    <div class="col" style="margin:-2px 0 4px">
     <h2 id="res-title">FIRED! 🦑</h2>
     <div id="res-sub" class="sub"></div>
     <div class="bigtime" id="res-time">00:00.000</div>
@@ -382,6 +422,7 @@
       <input id="res-name" maxlength="3" value="AAA" autocomplete="off" spellcheck="false" inputmode="latin">
     </div>
     <div id="res-rank" style="font-weight:900;color:var(--green);min-height:22px"></div>
+    </div>
     <div class="menurow">
       <button id="res-submit" class="btn">💾 Submit</button>
       <button id="res-continue" class="btn red">▶ Next Stage</button>
@@ -1025,7 +1066,9 @@ function syncPlayerBody() {
   player.body.setNextKinematicTranslation({ x: player.pos.x, y: 0.95, z: player.pos.z });
   player.body.setLinvel({ x: player.moveVel.x, y: 0, z: player.moveVel.z }, false);
 }
+const REDUCED_MOTION = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
 function camShake(mag, dur = 0.32) {
+  if (REDUCED_MOTION) return;
   cam.shakeMag = Math.max(cam.shakeMag * (cam.shakeT > 0 ? 1 : 0), mag);
   cam.shakeT = Math.max(cam.shakeT, dur); cam.shakeDur = Math.max(cam.shakeDur, dur);
 }
@@ -1079,9 +1122,10 @@ function updateHands(dt) {
 }
 let hoverHit = false, hoverTick = 0;
 function updateHover() {
-  hoverTick = (hoverTick + 1) % 4;
-  if (hoverTick !== 0 || game.state !== 'PLAYING' || grab.ent || U.isMobile) {
-    if (grab.ent) { hoverHit = false; $('#crosshair').classList.remove('hot', 'far'); }
+  const period = U.isMobile ? 8 : 4;   // cheaper cadence on touch
+  hoverTick = (hoverTick + 1) % period;
+  if (hoverTick !== 0 || game.state !== 'PLAYING' || grab.ent) {
+    if (grab.ent) { hoverHit = false; $('#crosshair').classList.remove('hot', 'far'); $('#crosshint').classList.remove('on'); }
     return;
   }
   const hit = pickFromNDC(0, 0, true);
@@ -1090,6 +1134,7 @@ function updateHover() {
   const el = $('#crosshair');
   el.classList.toggle('hot', hoverHit);
   el.classList.toggle('far', far);
+  $('#crosshint').classList.toggle('on', far);
 }
 function updateCamera(dt) {
   const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -3989,7 +4034,8 @@ const Board = {
     try { localStorage.removeItem(this.KEY); } catch (e) {}
   },
 };
-const MODE_LABEL = { any: '🏁 FULL ANY%', s1: 'L1 OFFICE', s2: 'L2 FAST FOOD', s3: 'L3 HOTLINE', s4: 'L4 SALES' };
+const MODE_LABEL = { any: '🏁 FULL ANY%' };
+LEVELS.forEach((L, i) => { MODE_LABEL['s' + (i + 1)] = 'L' + (i + 1) + ' ' + L().name; });
 function modeKey() { return game.mode === 'any' ? 'any' : 's' + (game.stageIndex + 1); }
 
 /* ------------------------------------------------------------------- HUD */
@@ -4045,6 +4091,7 @@ function loadStage(i, opts = {}) {
   game.stageIndex = i;
   game.rage = 0; game.won = false; game.frozen = false;
   game.objectives = {}; game.flags = {}; game.deskTotal = 0; game.levelHook = null; game.peacemaker = null;
+  document.body.classList.remove('meme');
   updateCalmChip();   // leaving L3 must clear the HR chip everywhere else
   game.ringing = false;
   game.bossNpc = null;
@@ -4121,6 +4168,7 @@ function beginPlay() {
 function goMenu() {
   try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
   game.state = 'MENU';
+  document.body.classList.remove('meme');
   buildMenu();
   showScreen('menu');
   game.mode = null;
@@ -4181,12 +4229,14 @@ function startClimax() {
     }
     $('#climax').classList.remove('hidden');
   }, 900);
+  document.body.classList.add('meme');
   bus.emit(EV.GAME_OVER_FIRED, { stage: game.stageIndex });
   delayed(() => finishStage(), 3100);
 }
 let pendingSubmit = null;
 function finishStage() {
   game.splits[game.stageIndex] = game.stageMs;
+  if (game.stageIndex < 3) toast('🔓 LEVEL ' + (game.stageIndex + 2) + ' UNLOCKED 解鎖下一關');
   Progress.unlock(game.stageIndex + 2);   // fired here -> next workplace opens
   bus.emit(EV.STAGE_COMPLETE, { stage: game.stageIndex, ms: game.stageMs });
   const last = game.stageIndex >= 3;
@@ -4249,8 +4299,11 @@ function showResults() {
   nameIn.value = saved;
   $('#res-rank').textContent = '';
   $('#res-submit').disabled = false;
-  $('#res-continue').classList.toggle('hidden', !(isAny && !finalStage));
-  pendingSubmit = { key, ms: shownMs };
+  const canNext = isAny ? !finalStage : (i < 3 && Progress.get() > i + 1);
+  $('#res-continue').classList.toggle('hidden', !canNext);
+  if (!isAny && canNext) $('#res-continue').textContent = '▶ Next Stage 下一關';
+  if (!U.isMobile) setTimeout(() => { try { $('#res-name').focus(); } catch (e) {} }, 200);
+  pendingSubmit = { key, ms: shownMs, final: isAny ? isFinalAny : true };
 }
 
 /* ------------------------------------------------------------- board UI */
@@ -4331,7 +4384,7 @@ function setupInput() {
   el.addEventListener('pointerdown', e => {
     audio.resume();
     // desktop: lock the pointer on first click (also allows grabbing in the same click)
-    if (!U.isMobile && !player.locked && !lockDisabled && el.requestPointerLock) {
+    if (!U.isMobile && !player.locked && !lockDisabled && game.state === 'PLAYING' && el.requestPointerLock) {
       try {
         const p = el.requestPointerLock();
         if (p && p.catch) p.catch(() => {});
@@ -4392,8 +4445,13 @@ function setupInput() {
   window.addEventListener('blur', () => { grabRelease(null, true, false); player.keys = {}; });
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('gesturestart', e => e.preventDefault());
+  let lockHintShown = false;
   document.addEventListener('pointerlockchange', () => {
     player.locked = document.pointerLockElement === el;
+    if (!player.locked && game.state === 'PLAYING' && !lockDisabled && !U.isMobile && !lockHintShown) {
+      lockHintShown = true;
+      toast('⏱ Cursor free — the clock keeps running · click to re-lock');
+    }
   });
   window.addEventListener('keydown', e => {
     const tag = e.target && e.target.tagName;
@@ -4459,9 +4517,16 @@ function setupUI() {
     audio.resume();
     recallAll(true);
   });
+  const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (IS_IOS) $('#btn-fs').style.display = 'none';
   $('#ctrl-hint').innerHTML = U.isMobile
     ? '<b>DRAG</b> empty space — look<br><b>TOUCH</b> an object — grab it<br><b>FLICK &amp; RELEASE</b> — throw!<br><b>🧲 RECALL</b> — bring far props back'
-    : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props';
+    : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props<br><b>ESC</b> release the cursor';
+  const anyBtn = $('#m-any');
+  anyBtn.classList.toggle('locked', Progress.get() < 4);
+  $('#m-any-sub').firstElementChild.innerHTML = Progress.get() < 4
+    ? '🔒 Clear all 4 levels to unlock · 通關四關解鎖'
+    : 'All 4 stages, one continuous timer · <span style="white-space:nowrap">四關連續計時</span>';
   $('#m-any').onclick = () => {
     if (Progress.get() < 4) { toast('🔒 Finish all 4 levels to unlock ANY%'); audio.play('buzzer'); return; }
     audio.play('click'); startRun('any');
@@ -4470,34 +4535,57 @@ function setupUI() {
   $('#how-back').onclick = () => { audio.play('click'); goMenu(); };
   $('#m-board').onclick = () => { audio.play('click'); showBoard('any'); };
   $('#board-back').onclick = () => { audio.play('click'); goMenu(); };
-  $('#board-clear').onclick = () => { audio.play('click'); Board.clear(); showBoard(); };
+  {
+    let armed = 0;
+    $('#board-clear').addEventListener('click', () => {
+      if (U.now() - armed < 2500) { armed = 0; Board.clear(); showBoard(); }
+      else { armed = U.now(); toast('🗑 Tap again to wipe ALL scores 再撳一次先清晒'); }
+    });
+  }
   $('#btn-mute').onclick = () => {
     audio.resume();
     audio.setMuted(!audio.muted);
     $('#btn-mute').textContent = audio.muted ? '🔇' : '🔊';
   };
   $('#hud-vol').oninput = e => { audio.resume(); audio.setVolume(e.target.value / 100); };
-  $('#btn-restart').onclick = () => { audio.play('click'); game.introToken++; restartRun(); };
-  $('#btn-menu').onclick = () => { audio.play('click'); game.introToken++; goMenu(); };
+  const tapTwice = (btn, msg, fn) => {
+    let armed = 0;
+    btn.addEventListener('click', () => {
+      if (U.now() - armed < 2500) { armed = 0; fn(); }
+      else { armed = U.now(); toast(msg); }
+    });
+  };
+  tapTwice($('#btn-restart'), '↺ Tap again to RESTART this run 再撳一次先重嚟', () => { game.introToken++; restartRun(); });
+  tapTwice($('#btn-menu'), '☰ Tap again to quit to the menu 再撳一次先離開', () => { game.introToken++; goMenu(); });
   $('#res-name').addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
   });
+  const savePendingRun = () => {
+    if (!pendingSubmit || !pendingSubmit.final) return true;   // mid-ANY% splits are not scores
+    Board.add(pendingSubmit.key, pendingSubmit.ms, $('#res-name').value);
+    $('#res-rank').textContent = '✅ Auto-saved to device leaderboard 已自動儲存';
+    pendingSubmit = null;
+    return true;
+  };
   $('#res-submit').onclick = () => {
-    if (!pendingSubmit) return;
+    if (!pendingSubmit) { toast('Already saved 已儲存'); return; }
     audio.play('cash');
     const rank = Board.add(pendingSubmit.key, pendingSubmit.ms, $('#res-name').value);
     $('#res-rank').textContent = rank ? '✅ Saved to device leaderboard — rank #' + rank + ' 儲存咗喇！' : 'Saved. 已儲存。';
+    pendingSubmit = null;
     $('#res-submit').disabled = true;
     buildMenu();
   };
-  $('#res-continue').onclick = () => { audio.play('click'); loadStage(game.stageIndex + 1); };
+  $('#res-continue').onclick = () => { audio.play('click'); savePendingRun(); loadStage(game.stageIndex + 1); };
   $('#res-retry').onclick = () => {
     audio.play('click');
+    savePendingRun();
     if (game.mode === 'any') { game.splits = []; game.runStart = 0; game.finalTotal = 0; loadStage(0); }
     else loadStage(game.stageIndex);
   };
-  $('#res-levels').onclick = () => { audio.play('click'); goMenu(); };
-  $('#res-board').onclick = () => { audio.play('click'); showBoard(pendingSubmit ? pendingSubmit.key : 'any'); };
+  $('#res-levels').onclick = () => { audio.play('click'); savePendingRun(); goMenu(); };
+  $('#res-board').onclick = () => { const k = pendingSubmit ? pendingSubmit.key : 'any'; audio.play('click'); savePendingRun(); showBoard(k); };
+  $('#res-name').addEventListener('keydown', e => { if (e.key === 'Enter') $('#res-submit').click(); });
   bus.on(EV.RAGE_UPDATED, () => {
     if (Math.abs(game.rage - lastMood) > 1) {
       lastMood = game.rage;

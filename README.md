@@ -53,6 +53,11 @@ The only network dependency is the two CDN modules, so the first load needs inte
 **Never stuck:** props stranded beyond arm's reach automatically walk home after ~12
 seconds, and 🧲 RECALL / `R` brings everything back instantly.
 
+**Safety rails:** ☰ quit-to-menu and ↺ restart need a confirming second tap; every
+finished run auto-saves to the device leaderboard when you leave the results screen
+(💾 Submit still pins your rank). On phones the HUD re-stacks in portrait so the rage
+meter is always readable, and `prefers-reduced-motion` disables shakes and flashes.
+
 ## 3. Test on a physical phone (same Wi-Fi)
 
 1. Find your computer's LAN IP (do **not** guess it — read it):

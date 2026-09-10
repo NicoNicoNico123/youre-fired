@@ -13,6 +13,7 @@ const CX = 480, CY = 300;
 
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
+page.on('console', m => { const t = m.text(); if (t.includes('[autosave]')) console.log('AUTOSAVE:', t); });
 const asset404 = [];
 page.on('response', r => { if (r.status() === 404 && r.url().includes('/assets/')) asset404.push(r.url()); });
 page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -556,6 +557,9 @@ T('ANY%: splits table has 4 rows', await page.locator('#res-splits div').count()
 await page.screenshot({ path: SHOTS + '09-anypercent.png' });
 
 // ---------- 9. LEADERBOARD PERSISTENCE ----------
+// runs now auto-save on final-result exits — wipe earlier incidental autosaves
+// so this section tests seeding/sorting against a known-clean board
+await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('yf_scores')).forEach(k => localStorage.removeItem(k)));   // keep yf_unlock/yf_name
 await page.fill('#res-name', 'TST');
 await page.click('#res-submit');
 await sleep(300);
@@ -579,6 +583,7 @@ const counts = [];
 for (let k = 0; k < 4; k++) {
   counts.push(await page.evaluate(() => YF.entityCount()));
   await page.click('#btn-restart');
+  await page.click('#btn-restart');   // restart is now double-tap confirmed
   await waitState('PLAYING', 25000);
 await calm();
   await sleep(300);
@@ -590,6 +595,7 @@ await waitState('PLAYING', 25000);
 await calm();
 await page.evaluate(() => document.exitPointerLock && document.exitPointerLock());
 await page.click('#btn-menu');
+await page.click('#btn-menu');      // quit-to-menu is double-tap confirmed
 await page.waitForFunction(() => YF.state() === 'MENU', null, { timeout: 10000 });
 T('reset: menu → backdrop loads', await page.isVisible('#menu'));
 await page.click('#m-levels button:nth-of-type(2)');
