@@ -327,6 +327,7 @@
 <div id="flash"></div>
 <div id="tut" class="hidden">
   <span class="t">👆 Tap</span> to grab 攞嘢 · <span class="t">👆👆</span> double-tap to use 用 · <span class="t">swipe ⬆</span> to throw 掟<br>
+  <span class="t">👊 Tap a customer</span> to punch 打佢 · <span class="t">👊👊</span> to chat 傾偈<br>
   <span class="t">hold + drag</span> empty space to look 拖空位睇四周<br>
   <span class="dismiss">✕ tap to dismiss · 點一下關閉</span>
 </div>
@@ -370,6 +371,7 @@
       <div class="sect"><b>📖 快速重點 QUICK REFERENCE</b><br>
         • 電腦 Desktop：滑鼠睇四周 · 左鍵攞嘢 · 甩手掟嘢 · 右鍵/E 輕輕放低 · R 收返遠嘢 · <b>Esc 放開滑鼠</b><br>
         • 手機 Mobile：拖空位睇四周 · 撳物件攞嘢 · 向上掃掟嘢 · 連點兩下用 · ✋ 放低 · 🧲 收返<br>
+        • 拳擊 Punch：撳客人/老闆 = 拳打 👊 · 撳兩下 = 傾偈 · 攞住嘢撳佢 = 大大力！<br>
         • 客人落單 — 上錯嘢或掟嘢佢身上 = 更多Rage！打滿 100% Rage 即被炒！</div>
       <div class="sect"><b>🖥️ Desktop — first person</b><br>
         • <b>Click</b> the screen once to lock the mouse, then <b>move the mouse to look around</b><br>
@@ -1512,21 +1514,75 @@ function interactProp(e) {
   buzz(10);
   lastInteractType = e.type;
 }
-function tapNPC(cx, cy) {
+// NPC picking is analytic (spheres at the same offsets as the physics hit zones) —
+// GLB meshes carry stale/origin-bound bounding spheres that break triangle raycasts
+const _punchSph = new THREE.Sphere();
+const _punchHit = new THREE.Vector3();
+const PUNCH_ZONES = [['head', 1.76, 0.44], ['torso', 1.15, 0.46], ['body', 0.45, 0.44]];
+function pickNpc(nx, ny) {
+  _npcRay.setFromCamera({ x: nx, y: ny }, camera);
+  let best = null;
   for (const n of npcs) {
     if (!n.alive) continue;
-    for (const oy of [2.0 * n.baseScale, 1.0 * n.baseScale]) {
-      const p = worldToScreen({ x: n.group.position.x, y: oy, z: n.group.position.z });
-      if (!p.behind && Math.hypot(p.x - cx, p.y - cy) < 130) {
-        n.react('happy'); n.sayMaybe(1); buzz(10);
-        return true;
-      }
+    const p = n.group.position, sc = n.baseScale || 1;
+    for (const [zone, dy, r] of PUNCH_ZONES) {
+      _punchSph.center.set(p.x, p.y + dy * sc, p.z);
+      _punchSph.radius = r * sc;
+      if (!_npcRay.ray.intersectSphere(_punchSph, _punchHit)) continue;
+      const d = _punchHit.distanceTo(camera.position);
+      if (best && d >= best.dist) continue;
+      best = { npc: n, dist: d, zone, point: _punchHit.clone() };
     }
   }
-  return false;
+  return best;
+}
+const FIST = { type: 'fist', mass: 0.85, traits: new Set(['fist']) };
+function punchNpc(pick, itemEnt) {
+  if (!pick || game.state !== 'PLAYING' || game.frozen || !pick.npc.alive) return false;
+  const n = pick.npc, now = U.now();
+  if (now < (n.nextPunch || 0)) return false;   // per-NPC swing cadence
+  n.nextPunch = now + 320;
+  const zoneF = pick.zone === 'head' ? 1.5 : pick.zone === 'torso' ? 1.25 : 1.0;
+  const key = (itemEnt ? 'npi:' + itemEnt.type : 'npf') + ':' + pick.zone;
+  const massF = itemEnt ? U.clamp(itemEnt.mass / 1.2, 0.7, 1.6) : 1;
+  const bossF = n.cfg && n.cfg.boss ? 1.15 : 1;
+  const base = itemEnt ? 2.6 : 1.5, cap = itemEnt ? 9 : 4.5;
+  const amt = Math.min(base * (n.hitMult || 1) * bossF * massF * zoneF * repFactor(key) * comboMult(), cap);
+  bumpCombo(); noteVariety(key);
+  stats.npcHits++;
+  if (!stats.hitVariety) stats.hitVariety = new Set();
+  stats.hitVariety.add(itemEnt ? itemEnt.type : 'fist');
+  if (stats.hitVariety.size >= 5) achievement('customer_right', 'CUSTOMER IS ALWAYS RIGHT');
+  const hp = n.headWorldPos();
+  addRage(amt, { pos: hp, big: pick.zone === 'head' });
+  audio.play('thud', U.clamp(0.55 + amt / 12, 0.5, 1.2));
+  buzz(pick.zone === 'head' ? 26 : 16);
+  n.react(pick.zone === 'head' ? 'headhit' : 'hit');
+  n.sayMaybe(0.45);
+  if (n.cfg && n.cfg.boss && Math.random() < 0.3) sayBubble(n, { zh: '你夠膽打我？！', en: 'Did you just HIT me?! YOU\'RE FIRED!!' });
+  FX.sparks({ x: pick.point.x, y: pick.point.y, z: pick.point.z });
+  camShake(0.045, 0.12);
+  floatText(hp, '👊 +' + Math.max(1, Math.round(amt)) + '% RAGE');
+  bus.emit(EV.NPC_HIT, { zone: pick.zone, obj: itemEnt ? itemEnt.type : 'fist' });
+  if (game.levelHook && game.levelHook.onNpcHit) game.levelHook.onNpcHit(n, itemEnt || FIST, pick.zone, hp, 4.2);
+  return true;
+}
+function tapNPC(cx, cy) {
+  const nx = (cx / window.innerWidth) * 2 - 1, ny = -(cy / window.innerHeight) * 2 + 1;
+  const pk = pickNpc(nx, ny);
+  if (!pk) return false;
+  if (lastTap && lastTap.id === pk.npc && U.now() - lastTap.t < 500) {
+    lastTap = null;                       // double-tap = chat
+    pk.npc.react('happy'); pk.npc.sayMaybe(1); buzz(10);
+    return true;
+  }
+  lastTap = { id: pk.npc, t: U.now() };
+  punchNpc(pk, null);                     // single tap = punch
+  return true;
 }
 const gltfLoader = new GLTFLoader();
 const gltfCache = new Map();
+const _npcRay = new THREE.Raycaster();
 function loadGlbEntry(entry) {
   return new Promise(resolve => {
     const attempt = (url, next) => {
@@ -1568,6 +1624,10 @@ function applyGlbVisual(e) {
       o.castShadow = SHADOWS; o.receiveShadow = SHADOWS;
     }
     o.userData.eid = e.id;
+    // several exported GLBs carry wrong bounding spheres (bounds at the node origin),
+    // which makes the raycaster cull every triangle — recompute so crosshair
+    // grabbing hits what you actually see
+    if (o.isMesh && o.geometry) o.geometry.computeBoundingSphere();
   });
   e.mesh.children.forEach(c => { c.visible = false; });
   e.mesh.add(model);
@@ -4301,8 +4361,8 @@ function showResults() {
   $('#res-submit').disabled = false;
   const canNext = isAny ? !finalStage : (i < 3 && Progress.get() > i + 1);
   $('#res-continue').classList.toggle('hidden', !canNext);
-  if (!isAny && canNext) $('#res-continue').textContent = '▶ Next Stage 下一關';
-  if (!U.isMobile) setTimeout(() => { try { $('#res-name').focus(); } catch (e) {} }, 200);
+  if (canNext) $('#res-continue').textContent = '▶ Next Stage 下一關';
+  if (!U.isMobile) setTimeout(() => { try { $('#res-name').focus({ preventScroll: true }); } catch (e) {} }, 200);
   pendingSubmit = { key, ms: shownMs, final: isAny ? isFinalAny : true };
 }
 
@@ -4380,6 +4440,7 @@ function setupInput() {
   const el = renderer.domElement;
   el.style.touchAction = 'none';
   let dragLook = null;
+  let punchSwing = null;   // pointerId of an in-progress item swing — its release must not drop the item
   let lockDisabled = false;
   el.addEventListener('pointerdown', e => {
     audio.resume();
@@ -4394,11 +4455,21 @@ function setupInput() {
     if (wantGrab) {
       const nx = player.locked ? 0 : (e.clientX / window.innerWidth) * 2 - 1;
       const ny = player.locked ? 0 : -(e.clientY / window.innerHeight) * 2 + 1;
-      try { el.setPointerCapture && el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+      // capture is only for touch drags that leave the canvas — capturing the mouse
+      // keeps later panel-button clicks retargeted to the canvas (bypasses hit-testing)
+      try { if (e.pointerType !== 'mouse' && el.setPointerCapture) el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
       if (tryGrab(nx, ny, e.pointerId)) { e.preventDefault(); return; }
     }
-    // empty space → drag to look (touch / unlocked fallback)
-    dragLook = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: U.now() };
+    // holding something and aiming at an NPC = swing it at them (never releases the item)
+    if (grab.ent && game.state === 'PLAYING' && !game.frozen) {
+      const snx = player.locked ? 0 : (e.clientX / window.innerWidth) * 2 - 1;
+      const sny = player.locked ? 0 : -(e.clientY / window.innerHeight) * 2 + 1;
+      const pk = pickNpc(snx, sny);
+      if (pk && punchNpc(pk, grab.ent)) { punchSwing = e.pointerId; e.preventDefault(); return; }
+    }
+    // empty space → drag to look (touch / unlocked fallback) — gameplay state only,
+    // so clicks that miss panel buttons never start a ghost look-drag
+    if (game.state === 'PLAYING') dragLook = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: U.now() };
     e.preventDefault();
   }, { passive: false });
   el.addEventListener('pointermove', e => {
@@ -4429,9 +4500,11 @@ function setupInput() {
       }
       dragLook = null;
     }
-    if (grab.ent) { grabRelease(e, false, false); grab._lx = grab._ly = null; }
+    if (grab.ent && e.pointerId !== punchSwing) { grabRelease(e, false, false); grab._lx = grab._ly = null; }
+    punchSwing = null;
   };
   const cancel = e => {
+    punchSwing = null;
     if (dragLook && e.pointerId === dragLook.id) dragLook = null;
     if (grab.ent) { grabRelease(e, true, false); grab._lx = grab._ly = null; }
   };
@@ -4521,7 +4594,7 @@ function setupUI() {
   if (IS_IOS) $('#btn-fs').style.display = 'none';
   $('#ctrl-hint').innerHTML = U.isMobile
     ? '<b>DRAG</b> empty space — look<br><b>TOUCH</b> an object — grab it<br><b>FLICK &amp; RELEASE</b> — throw!<br><b>🧲 RECALL</b> — bring far props back'
-    : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props<br><b>ESC</b> release the cursor';
+    : '<b>MOUSE</b> look around your station<br><b>LEFT-CLICK</b> grab · <b>FLICK</b> to throw<br><b>CLICK NPC</b> punch 👊 · <b>2×CLICK</b> chat<br><b>RIGHT-CLICK / E</b> place · <b>WHEEL</b> reach<br><b>R</b> recall far props<br><b>ESC</b> release the cursor';
   const anyBtn = $('#m-any');
   anyBtn.classList.toggle('locked', Progress.get() < 4);
   $('#m-any-sub').firstElementChild.innerHTML = Progress.get() < 4
@@ -4724,6 +4797,7 @@ window.YF = {
     x: +n.group.position.x.toFixed(2), z: +n.group.position.z.toFixed(2),
     boss: !!(n.cfg && n.cfg.boss), customer: !!n.cfg.customer,
   })),
+  npcPick: (nx = 0, ny = 0) => { const p = pickNpc(nx, ny); return p ? { zone: p.zone, dist: +p.dist.toFixed(2), who: (p.npc.cfg && p.npc.cfg.boss) ? 'boss' : (p.npc.cfg && p.npc.cfg.customer) ? 'customer' : 'npc' } : null; },
   peacemaker: () => {
     const p = game.peacemaker;
     return p && p.alive ? { x: +p.group.position.x.toFixed(2), z: +p.group.position.z.toFixed(2), kicks: p.kickHits || 0, fleeing: !!p.fleeing } : null;
@@ -4735,7 +4809,7 @@ window.YF = {
   propInfo: type => {
     for (const e of entities.values()) if (e.kind === 'prop' && e.alive && e.type === type) {
       const v = e.body.linvel();
-      return { pos: e.body.translation(), vel: { x: +v.x.toFixed(2), y: +v.y.toFixed(2), z: +v.z.toFixed(2) }, stamped: e.meta.stamped || null, fried: !!e.meta.fried };
+      return { pos: e.body.translation(), vel: { x: +v.x.toFixed(2), y: +v.y.toFixed(2), z: +v.z.toFixed(2) }, stamped: e.meta.stamped || null, fried: !!e.meta.fried, shredded: !!e.meta.shredded, grabbable: e.traits.has('grabbable') };
     }
     return null;
   },

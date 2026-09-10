@@ -282,6 +282,46 @@ await page.evaluate(() => { YF.teleport('calculator', -7, 0.4, 5.5); YF.teleport
 await sleep(250);
 
 await calm();
+// ---------- 3a. PUNCH: tap NPC = fist, double-tap = chat, held item = heavier ----------
+await page.evaluate(() => { const n = YF.npcPos(); YF.teleport('mug', 6, 0.4, -5); YF.teleport('monitor', -6, 0.4, -5); YF.teleport('laptop', -6.5, 0.4, -5); YF.lookTo(n.x, n.y + 0.05, n.z); });
+await sleep(400);
+const pNpc = await page.evaluate(() => { const n = YF.npcPos(); return YF.project(n.x, n.y, n.z); });
+T('L1: NPC head under crosshair', !!pNpc, JSON.stringify(pNpc));
+const tap = (x, y, id) => page.evaluate(([x, y, id]) => {
+  const c = document.querySelector('#app canvas');
+  c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: id, pointerType: 'mouse', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  c.dispatchEvent(new PointerEvent('pointerup', { pointerId: id, pointerType: 'mouse', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+}, [x, y, id]);
+const pf0 = await page.evaluate(() => YF.rage());
+await tap(pNpc.x, pNpc.y, 41);
+await sleep(350);
+const pf1 = await page.evaluate(() => YF.rage());
+T('L1: fist punch adds rage', pf1 - pf0 > 0.3, `+${(pf1 - pf0).toFixed(2)}`);
+T('L1: punch does not grab', await page.evaluate(() => YF.grab()) === null);
+await tap(pNpc.x, pNpc.y, 42);            // second tap inside the 500ms window = chat
+await sleep(250);
+const pf2 = await page.evaluate(() => YF.rage());
+T('L1: double-tap NPC chats (no punch)', Math.abs(pf2 - pf1) < 0.25, `+${(pf2 - pf1).toFixed(2)}`);
+// held-item swing pays more and keeps the item
+await page.evaluate(() => YF.teleport('calculator', 0.5, 1.05, 3.0));
+await settled('calculator');
+await page.mouse.move(CX, CY);
+await page.evaluate(() => { const m = YF.pos('calculator'); YF.lookTo(m.x, m.y, m.z); });   // fresh aim — the calc creeps
+await page.mouse.down();
+T('L1: calculator grabbed for swing', await page.evaluate(() => YF.grab()) === 'calculator',
+  'grab=' + await page.evaluate(() => YF.grab()) + ' ray=' + JSON.stringify(await page.evaluate(() => YF.rayGrab(0, 0))) + ' pos=' + JSON.stringify(await page.evaluate(() => YF.pos('calculator'))) + ' state=' + await page.evaluate(() => YF.state()));
+await page.evaluate(() => { const n = YF.npcPos(); YF.lookTo(n.x, n.y + 0.05, n.z); });
+await sleep(300);
+const piAim = await page.evaluate(() => { const n = YF.npcPos(); return YF.project(n.x, n.y, n.z); });
+const pi0 = await page.evaluate(() => YF.rage());
+await tap(piAim.x, piAim.y, 43);
+await sleep(350);
+const pi1 = await page.evaluate(() => YF.rage());
+T('L1: item punch beats fist', pi1 - pi0 > pf1 - pf0, `item +${(pi1 - pi0).toFixed(2)} vs fist +${(pf1 - pf0).toFixed(2)}`);
+T('L1: item stays held after swing', await page.evaluate(() => YF.grab()) === 'calculator');
+await page.evaluate(() => YF.throwHeld());
+await sleep(250);
+
 // ---------- 3b. L1 OBJECTIVES ----------
 const kb = await page.evaluate(() => YF.pos('keyboard'));
 await page.evaluate(([x, y, z]) => YF.teleport('mug', x, y + 0.6, z), [kb.x, kb.y, kb.z]);
@@ -300,11 +340,22 @@ T('L1: contract consumed by shredder', consumed);
 const sh2 = await page.evaluate(() => YF.sensorPos('shredder'));
 let stapled = false;
 for (let k = 0; k < 8 && !stapled; k++) {
-  await page.evaluate(([x, y, z]) => YF.teleport('stapler', x, y + 0.04, z), [sh2.x, sh2.y, sh2.z]); // drop inside the slot
+  // earlier chaos can fire you mid-section: in RESULT the physics pauses and
+  // onSensor drops every event, so make sure the stage is live before each try
+  if (await state() !== 'PLAYING') {
+    await page.evaluate(() => YF.startRun(0));
+    await waitState('PLAYING', 25000);
+  }
+  await calm();
+  // park the stapler far from the shredder first: sensor enter-events only fire on
+  // intersection TRANSITIONS, so re-teleporting within the volume is a silent no-op
+  await page.evaluate(([x, y, z]) => YF.teleport('stapler', x + 3, 2.4, z + 2), [sh2.x, sh2.y, sh2.z]);
+  await sleep(350);
+  await page.evaluate(([x, y, z]) => YF.teleport('stapler', x, y + 0.3, z), [sh2.x, sh2.y, sh2.z]); // drop in from above
   stapled = await waitSecret('stapler_shred', 4000);
   if (!stapled) {
     const dbg = await page.evaluate(() => ({
-      alive: YF.props().some(p => p.startsWith('stapler:1')),
+      alive: YF.props().some(p => p.startsWith('stapler:1')), count: YF.props().filter(p => p.startsWith('stapler')).length,
       stapler: YF.propInfo('stapler'), sensor: YF.sensorPos('shredder'),
       state: YF.state(), sec: YF.secrets(),
     }));
@@ -543,9 +594,28 @@ for (let s = 0; s < 4; s++) {
       await waitState('PLAYING', 25000);
 await calm();
     } catch (e) {
-      console.log('  ANY% continue stalled. state=' + await state() + ' errors:');
+      console.log('  ANY% continue stalled at s=' + s + '. state=' + await state() + ' errors:');
       consoleErrors.forEach(ce => console.log('    ⚠ ' + ce.slice(0, 300)));
-      throw e;
+      console.log('  DIAG:', JSON.stringify(await page.evaluate(() => {
+        const b = document.querySelector('#res-continue').getBoundingClientRect();
+        const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+        const cv = document.querySelector('canvas');
+        return {
+          cap1: cv.hasPointerCapture ? cv.hasPointerCapture(1) : 'n/a',
+          stageIndex: YF.game.stageIndex, mode: YF.game.mode, rage: YF.rage(),
+          contHidden: document.querySelector('#res-continue').classList.contains('hidden'),
+          contText: document.querySelector('#res-continue').textContent.trim(),
+          contVisible: !!(b.width && b.height),
+          topEl: el ? (el.id || el.className || el.tagName) : 'none',
+          introHidden: document.querySelector('#intro').classList.contains('hidden'),
+          screens: [...document.querySelectorAll('.screen')].filter(x => !x.classList.contains('hidden')).map(x => x.id),
+          locked: !!document.pointerLockElement,
+          pendingFinal: null,
+        };
+      })));
+      console.log('  falling back to direct el.click()');
+      await page.evaluate(() => document.querySelector('#res-continue').click());
+      try { await waitState('PLAYING', 15000); await calm(); } catch (e2) { throw e; }
     }
   }
 }
